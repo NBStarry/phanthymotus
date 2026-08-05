@@ -140,29 +140,94 @@ async def _do_start_project():
     layout = config.main.get('canvas_layout', {})
     cards = layout.get('cards', [])
     connections = layout.get('connections', [])
+    mcp_entries = config.main.get('services', {}).get('mcp', [])
 
     if not cards:
         return
+
+    from navigation_execution import ExecutionControlError, discover_execution_links
+    from topic_action_routing import (
+        TopicActionError,
+        resolve_topic_action_routes,
+        start_topic_action_routes,
+    )
+
+    execution_error = None
+    try:
+        execution_links = discover_execution_links(
+            layout=layout, mcp_entries=mcp_entries
+        )
+    except ExecutionControlError as exc:
+        execution_links = []
+        execution_error = f'{exc.code}: {exc}'
+    execution_target_ids = {link.target_card_id for link in execution_links}
+
+    topic_action_error = None
+    try:
+        resolve_topic_action_routes(layout=layout, mcp_entries=mcp_entries)
+    except TopicActionError as exc:
+        topic_action_error = str(exc)
 
     # 分类：sources (无入连接) 和 processors (有入连接)
     cards_with_inbound = set()
     for conn in connections:
         cards_with_inbound.add(conn.get('toCardId'))
 
-    sources = [c for c in cards if c['id'] not in cards_with_inbound]
-    processors = [c for c in cards if c['id'] in cards_with_inbound]
-    all_ordered = sources + processors
+    sources = [
+        c for c in cards
+        if c['id'] not in cards_with_inbound and c['id'] not in execution_target_ids
+    ]
+    processors = [
+        c for c in cards
+        if c['id'] in cards_with_inbound and c['id'] not in execution_target_ids
+    ]
+    execution_standby = [c for c in cards if c['id'] in execution_target_ids]
+    all_ordered = sources + processors + execution_standby
 
     # 广播启动开始
     await push_event({'type': 'project_start_begin', 'payload': {
         'cards': [{'tool': c.get('toolName', ''), 'mcp_id': c.get('mcpId', '')} for c in all_ordered],
     }})
 
+    startup_wiring_errors = [
+        error for error in (execution_error, topic_action_error) if error
+    ]
+    if startup_wiring_errors:
+        await push_event({'type': 'project_start_done', 'payload': {
+            'has_error': True,
+            'errors': startup_wiring_errors,
+        }})
+        print(
+            '[start-project] trusted wiring rejected: '
+            + '; '.join(startup_wiring_errors)
+        )
+        return False
+
     errors = []
     # Resolved topic_out per card (populated after starting sources)
     resolved_topics: dict[str, list] = {}
 
-    async def _start_and_resolve(card, input_topic: str = '', input_topics: list = None):
+    def _parse_call_data(result):
+        data = result.get('data') if isinstance(result, dict) else None
+        if isinstance(data, list) and data:
+            text = data[0].get('text', '{}') if isinstance(data[0], dict) else '{}'
+            try:
+                return _json.loads(text)
+            except Exception:
+                return {}
+        if isinstance(data, str):
+            try:
+                return _json.loads(data)
+            except Exception:
+                return {}
+        return data if isinstance(data, dict) else {}
+
+    async def _start_and_resolve(
+        card,
+        input_topic: str = '',
+        input_topics: list = None,
+        input_bindings: list = None,
+    ):
         """Start a card, then call info() to get its resolved topic_out."""
         mcp_id = card.get('mcpId', '')
         tool_name = card.get('toolName', '')
@@ -179,6 +244,8 @@ async def _do_start_project():
             args['input_topics'] = input_topics
         elif input_topic:
             args['input_topic'] = input_topic
+        if input_bindings:
+            args['input_bindings'] = input_bindings
 
         try:
             req = MCPCallRequest(tool=tool_name, arguments=args)
@@ -215,19 +282,7 @@ async def _do_start_project():
                     info_req = MCPCallRequest(tool=tool_name, arguments={'action': 'info', 'instance_id': card_id})
                     info_result = await mcp_call_tool(mcp_id, info_req)
                     if info_result.get('code') == 200:
-                        data = info_result.get('data')
-                        # Parse MCP JSON-RPC content format: [{"type":"text","text":"..."}]
-                        if isinstance(data, list) and data:
-                            text = data[0].get('text', '{}') if isinstance(data[0], dict) else '{}'
-                            try:
-                                data = _json.loads(text)
-                            except Exception:
-                                data = {}
-                        elif isinstance(data, str):
-                            try:
-                                data = _json.loads(data)
-                            except Exception:
-                                data = {}
+                        data = _parse_call_data(info_result)
                         if isinstance(data, dict):
                             topic_out = data.get('topic_out', [])
                             if topic_out:
@@ -253,38 +308,98 @@ async def _do_start_project():
             }})
             errors.append(tool_name)
 
-    def _resolve_input_topic(card_id: str) -> tuple[str, list]:
+    async def _check_execution_standby(card, link):
+        """Validate the Driver proposal port without arming physical execution."""
+        mcp_id = card.get('mcpId', '')
+        tool_name = card.get('toolName', '')
+        card_id = card.get('id', '')
+        await push_event({'type': 'project_start_item', 'payload': {
+            'tool': tool_name, 'mcp_id': mcp_id, 'status': 'checking',
+        }})
+        try:
+            result = await mcp_call_tool(
+                mcp_id,
+                MCPCallRequest(
+                    tool=tool_name,
+                    arguments={'action': 'info', 'instance_id': card_id},
+                ),
+            )
+            data = _parse_call_data(result)
+            valid = bool(
+                result.get('code') == 200
+                and data.get('state') != 'error'
+                and data.get('enabled') is True
+                and data.get('connected') is False
+                and data.get('armed') is False
+                and data.get('expected_topic') == link.proposal_topic
+                and data.get('schema') == link.proposal_schema
+            )
+            if not valid:
+                raise RuntimeError(f'Driver execution standby check failed: {data}')
+            await push_event({'type': 'project_start_item', 'payload': {
+                'tool': tool_name, 'mcp_id': mcp_id, 'status': 'standby',
+            }})
+            print(f'[start-project] execution standby {tool_name} ({mcp_id})')
+        except Exception as exc:
+            errors.append(tool_name)
+            await push_event({'type': 'project_start_item', 'payload': {
+                'tool': tool_name,
+                'mcp_id': mcp_id,
+                'status': 'error',
+                'message': str(exc)[:200],
+            }})
+
+    def _resolve_input_topic(card_id: str) -> tuple[str, list, list]:
         """Resolve input_topic(s) for a processor card from its inbound connections."""
         in_conns = [c for c in connections if c.get('toCardId') == card_id]
         topics = []
+        bindings = []
+        target_card = next((c for c in cards if c.get('id') == card_id), {})
+        target_ports = target_card.get('topicIn') or []
         for conn in in_conns:
             from_card_id = conn.get('fromCardId', '')
             port_idx = int(conn.get('fromPortIdx', 0))
+            resolved_topic = ''
             # Primary: use resolved topic_out from source card's info() response
             if from_card_id in resolved_topics:
                 out_list = resolved_topics[from_card_id]
                 if port_idx < len(out_list) and out_list[port_idx].get('topic'):
-                    topics.append(out_list[port_idx]['topic'])
-                elif out_list and out_list[0].get('topic'):
-                    topics.append(out_list[0]['topic'])
+                    resolved_topic = out_list[port_idx]['topic']
+                elif len(out_list) == 1 and out_list[0].get('topic'):
+                    resolved_topic = out_list[0]['topic']
             # Fallback: use persisted fromTopic in connection data
             elif conn.get('fromTopic'):
-                topics.append(conn['fromTopic'])
+                resolved_topic = conn['fromTopic']
             # Fallback 2: use source card's persisted topicOut
             else:
                 from_card = next((c for c in cards if c.get('id') == from_card_id), None)
                 if from_card:
                     card_topic_out = from_card.get('topicOut') or []
                     if port_idx < len(card_topic_out) and card_topic_out[port_idx].get('topic'):
-                        topics.append(card_topic_out[port_idx]['topic'])
-                    elif card_topic_out and card_topic_out[0].get('topic'):
-                        topics.append(card_topic_out[0]['topic'])
+                        resolved_topic = card_topic_out[port_idx]['topic']
+                    elif len(card_topic_out) == 1 and card_topic_out[0].get('topic'):
+                        resolved_topic = card_topic_out[0]['topic']
+            if not resolved_topic:
+                continue
+            topics.append(resolved_topic)
+            try:
+                target_index = int(conn.get('toPortIdx', -1))
+            except (TypeError, ValueError):
+                target_index = -1
+            if 0 <= target_index < len(target_ports):
+                target_port = target_ports[target_index]
+                bindings.append({
+                    'port': target_port.get('port', ''),
+                    'topic': resolved_topic,
+                    'format': target_port.get('format', ''),
+                    'schema': target_port.get('schema', ''),
+                })
         topics = list(set(t for t in topics if t))
         if len(topics) > 1:
-            return '', topics
+            return '', topics, bindings
         elif len(topics) == 1:
-            return topics[0], []
-        return '', []
+            return topics[0], [], bindings
+        return '', [], bindings
 
     # Phase 1: start sources (no input_topic needed) and collect their topic_out
     for card in sources:
@@ -292,8 +407,30 @@ async def _do_start_project():
 
     # Phase 2: start processors with resolved input_topic from sources
     for card in processors:
-        input_topic, input_topics = _resolve_input_topic(card['id'])
-        await _start_and_resolve(card, input_topic=input_topic, input_topics=input_topics)
+        input_topic, input_topics, input_bindings = _resolve_input_topic(card['id'])
+        await _start_and_resolve(
+            card,
+            input_topic=input_topic,
+            input_topics=input_topics,
+            input_bindings=input_bindings,
+        )
+
+    # Phase 3: execution actuators stay unarmed until one navigation task owns a nav_id.
+    for link in execution_links:
+        card = next(c for c in execution_standby if c.get('id') == link.target_card_id)
+        await _check_execution_standby(card, link)
+
+    # Phase 4: connect declared control-topic routes only after all cards and the
+    # Driver standby contract are ready. The route calls the ordinary MCP API,
+    # so navigation still acquires the same trusted execution lease.
+    if not errors:
+        try:
+            await start_topic_action_routes(
+                layout=layout,
+                mcp_entries=mcp_entries,
+            )
+        except Exception as exc:
+            errors.append(f'topic_action_routing: {exc}')
 
     # 有 card 失败 → 全部回滚，不标记 running
     if errors:
@@ -329,11 +466,40 @@ async def _do_stop_project():
     """停止所有 canvas cards。"""
     from api.mcp_manage import mcp_call_tool, MCPCallRequest
     from api.motus_stream import push_event
+    import json as _json
+
+    # Fail closed before stopping cards: once Canvas stop begins, no new goal
+    # message may acquire a navigation execution lease.
+    from topic_action_routing import stop_topic_action_routes
+    stop_topic_action_routes()
 
     layout = config.main.get('canvas_layout', {})
     cards = layout.get('cards', [])
+    mcp_entries = config.main.get('services', {}).get('mcp', [])
 
-    for card in cards:
+    from navigation_execution import (
+        ExecutionControlError,
+        clear_lease_for_source,
+        discover_execution_links,
+    )
+
+    try:
+        execution_links = discover_execution_links(
+            layout=layout, mcp_entries=mcp_entries
+        )
+    except ExecutionControlError as exc:
+        execution_links = []
+        execution_discovery_error = f'{exc.code}: {exc}'
+    else:
+        execution_discovery_error = None
+    target_ids = {link.target_card_id for link in execution_links}
+    ordered_cards = (
+        [card for card in cards if card.get('id') in target_ids]
+        + [card for card in cards if card.get('id') not in target_ids]
+    )
+    errors = [execution_discovery_error] if execution_discovery_error else []
+
+    for card in ordered_cards:
         mcp_id = card.get('mcpId', '')
         tool_name = card.get('toolName', '')
         card_id = card.get('id', '')
@@ -341,15 +507,44 @@ async def _do_stop_project():
             continue
         try:
             req = MCPCallRequest(tool=tool_name, arguments={'action': 'stop', 'instance_id': card_id})
-            await mcp_call_tool(mcp_id, req)
-        except Exception:
-            pass
+            result = await mcp_call_tool(mcp_id, req)
+            if result.get('code') != 200:
+                errors.append(tool_name)
+                continue
+            if card_id in target_ids:
+                data = result.get('data')
+                if isinstance(data, list) and data:
+                    try:
+                        data = _json.loads(data[0].get('text', '{}'))
+                    except Exception:
+                        data = {}
+                if not (
+                    isinstance(data, dict)
+                    and data.get('connected') is False
+                    and data.get('stop_confirmed') is True
+                ):
+                    errors.append(tool_name)
+                    continue
+                for link in execution_links:
+                    if link.target_card_id == card_id:
+                        clear_lease_for_source(link.source_mcp_id, link.source_tool)
+        except Exception as exc:
+            print(f'[stop-project] failed {tool_name}: {exc}')
+            errors.append(tool_name)
+
+    if errors:
+        await push_event({'type': 'project_state', 'payload': {
+            'running': True, 'stop_error': True, 'errors': errors,
+        }})
+        print(f'[stop-project] stop was not confirmed for: {", ".join(errors)}')
+        return False
 
     core = config.main.get('core', {})
     core['project_running'] = False
     config.main['core'] = core
     await push_event({'type': 'project_state', 'payload': {'running': False}})
     print('[stop-project] done')
+    return True
 
 
 @router.post('/start-project')
@@ -365,7 +560,12 @@ async def api_start_project():
 
 @router.post('/stop-project')
 async def api_stop_project():
-    await _do_stop_project()
+    success = await _do_stop_project()
+    if success is False:
+        return fastapi.responses.JSONResponse(
+            status_code=500,
+            content={'ok': False, 'detail': 'Driver 停车未确认，项目保持运行态'}
+        )
     return {'ok': True}
 
 
@@ -957,5 +1157,3 @@ async def reset_config(req: ResetRequest):
             )
 
     return {'ok': True, 'reset': reset_items}
-
-

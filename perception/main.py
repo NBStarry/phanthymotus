@@ -108,6 +108,17 @@ class PerceptionBundle:
             self._plugins.append(plugin)
             log.info("VideoObjectPerceptionPlugin loaded (namespace=%s)", namespace)
 
+        if plugins_cfg.get("general_navigation", {}).get("enabled", False):
+            import re, socket
+            navigation_cfg = plugins_cfg["general_navigation"]
+            namespace = navigation_cfg.get("namespace", "").strip()
+            if not namespace:
+                namespace = re.sub(r"[^a-zA-Z0-9_]", "_", socket.gethostname())
+            from plugins.general_navigation import GeneralNavigationPlugin
+            plugin = GeneralNavigationPlugin(navigation_cfg, namespace, executor)
+            self._plugins.append(plugin)
+            log.info("GeneralNavigationPlugin loaded (namespace=%s)", namespace)
+
     def get_all_tools(self) -> list:
         tools = []
         for p in self._plugins:
@@ -129,6 +140,16 @@ class PerceptionBundle:
             if getattr(p, 'PREFIX', None) == 'tts':
                 return p.synthesize_raw(text)
         raise RuntimeError("TTS plugin not loaded or not enabled")
+
+    def stop(self) -> None:
+        for plugin in reversed(self._plugins):
+            stop = getattr(plugin, "stop", None)
+            if not callable(stop):
+                continue
+            try:
+                stop()
+            except Exception:
+                log.exception("failed to stop plugin %s", type(plugin).__name__)
 
 
 # ── MCP HTTP server ───────────────────────────────────────────────────────────
@@ -436,8 +457,12 @@ def main():
     cfg      = _load_config()
     mcp_port = int(cfg.get("mcp_port", 15720))
     ws_port  = int(cfg.get("ws_port",  15721))
+    ws_enabled = cfg.get("ws_enabled", True) is True
 
-    log.info(f"perception bundle starting, mcp_port={mcp_port}, ws_port={ws_port}")
+    log.info(
+        f"perception bundle starting, mcp_port={mcp_port}, ws_port={ws_port}, "
+        f"ws_enabled={ws_enabled}"
+    )
     log.info(f"config: plugins.asr.enabled={cfg.get('plugins',{}).get('asr',{}).get('enabled')}, "
              f"plugins.tts.enabled={cfg.get('plugins',{}).get('tts',{}).get('enabled')}")
     asr_cfg = cfg.get('plugins',{}).get('asr',{})
@@ -459,8 +484,17 @@ def main():
 
     threading.Thread(target=_spin, daemon=True, name="perception_spin").start()
 
-    # Start WebSocket ASR server in a separate thread
-    threading.Thread(target=_start_ws_thread, args=(ws_port,), daemon=True, name="ws_asr").start()
+    # The navigation-only bundle intentionally excludes WebSocket/ASR dependencies.
+    # Default stays enabled so existing perception images preserve their behavior.
+    if ws_enabled:
+        threading.Thread(
+            target=_start_ws_thread,
+            args=(ws_port,),
+            daemon=True,
+            name="ws_asr",
+        ).start()
+    else:
+        log.info("WebSocket ASR server disabled by config")
 
     _start_registration(mcp_port, "Perception Stack", "perception")
 
@@ -477,6 +511,7 @@ def main():
     try:
         server.serve_forever()
     finally:
+        _bundle.stop()
         executor.shutdown()
         rclpy.shutdown()
 

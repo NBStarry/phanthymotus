@@ -53,6 +53,15 @@ def _low_lat_qos():
     )
 
 
+def _reliable_qos():
+    return QoSProfile(
+        reliability=ReliabilityPolicy.RELIABLE,
+        history=HistoryPolicy.KEEP_LAST,
+        depth=10,
+        durability=DurabilityPolicy.VOLATILE,
+    )
+
+
 def start(loop: asyncio.AbstractEventLoop = None) -> None:
     global _thread, _running, _node_main, _loop, _executor
     if not _HAS_RCLPY:
@@ -104,10 +113,18 @@ def stop() -> None:
     print('[ros2_bridge] stopped')
 
 
-def subscribe(mcp_id: str, topic: str, fmt: str, loop: asyncio.AbstractEventLoop, cb) -> None:
+def subscribe(
+    mcp_id: str,
+    topic: str,
+    fmt: str,
+    loop: asyncio.AbstractEventLoop,
+    cb,
+    *,
+    reliable: bool = False,
+) -> bool:
     """订阅 topic；每收到一帧就在 loop 中 schedule cb(data: bytes, fmt: str)。"""
     if not _HAS_RCLPY or not _running:
-        return
+        return False
 
     # Always use the loop captured at start() — the caller's loop may not be running
     # when run_coroutine_threadsafe is called from the rclpy spin thread.
@@ -120,7 +137,7 @@ def subscribe(mcp_id: str, topic: str, fmt: str, loop: asyncio.AbstractEventLoop
     msg_type = _resolve_msg_type(fmt)
     if msg_type is None:
         print(f'[ros2_bridge] unsupported format {fmt!r} for topic {topic}', file=sys.stderr)
-        return
+        return False
 
     def _on_msg(msg):
         try:
@@ -133,12 +150,17 @@ def subscribe(mcp_id: str, topic: str, fmt: str, loop: asyncio.AbstractEventLoop
         _last_seen[topic] = _time.time()
         asyncio.run_coroutine_threadsafe(cb(data, msg_fmt), _cb_loop)
 
-    sub = _node_main.create_subscription(msg_type, topic, _on_msg, _low_lat_qos())
+    qos = _reliable_qos() if reliable else _low_lat_qos()
+    sub = _node_main.create_subscription(msg_type, topic, _on_msg, qos)
     with _lock:
         _subs[mcp_id] = {'sub': sub, 'topic': topic, 'fmt': fmt}
     if _executor:
         _executor.wake()
-    print(f'[ros2_bridge] subscribed mcp_id={mcp_id} topic={topic}')
+    print(
+        f'[ros2_bridge] subscribed mcp_id={mcp_id} topic={topic} '
+        f'reliability={"reliable" if reliable else "best_effort"}'
+    )
+    return True
 
 
 def unsubscribe(mcp_id: str) -> None:

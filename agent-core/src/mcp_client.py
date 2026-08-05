@@ -133,6 +133,7 @@ async def _connect_one(mcp_id: str, name: str, url: str, render_hint: str) -> No
                         'action_enum': action_enum,
                         'has_config_schema': bool(tool.get('configSchema')),
                         'completion': raw_input_schema.get('x-completion'),
+                        'execution_control': tool.get('x-execution-control'),
                     }
                 else:
                     # 拆分：多个 sub-schemas
@@ -146,6 +147,7 @@ async def _connect_one(mcp_id: str, name: str, url: str, render_hint: str) -> No
                             'action_enum': None,
                             'has_config_schema': bool(tool.get('configSchema')),
                             'completion': (tool.get('inputSchema') or {}).get('x-completion'),
+                            'execution_control': tool.get('x-execution-control'),
                         }
                         # 解析 action name（最后一段 __）
                         action_name = schema['name'].split('__')[-1]
@@ -291,7 +293,117 @@ def _get_tool_config(mcp_id: str, tool_name: str) -> dict | None:
     return config.main.get(f'tool_config:{mcp_id}:{tool_name}', None)
 
 
+def full_name_for_call(mcp_id: str, tool_name: str, action: str = '') -> str:
+    """Resolve an original MCP tool/action pair to its registered schema name."""
+    info = registry.get(mcp_id, {})
+    if action:
+        for split_name, route in info.get('split_map', {}).items():
+            if route.get('tool') == tool_name and route.get('action') == action:
+                return split_name
+    return f'mcp__{mcp_id}__{tool_name}'
+
+
+def execution_control_for_call(mcp_id: str, tool_name: str, action: str) -> tuple[str, dict] | None:
+    """Return the execution-control metadata for one managed navigation call."""
+    full_name = full_name_for_call(mcp_id, tool_name, action)
+    control = (
+        registry.get(mcp_id, {})
+        .get('tool_meta', {})
+        .get(full_name, {})
+        .get('execution_control')
+    )
+    if not isinstance(control, dict):
+        return None
+    managed = set()
+    for key in ('start_actions', 'wait_actions', 'stop_actions', 'pause_actions', 'resume_actions'):
+        managed.update(control.get(key, []))
+    return (full_name, control) if action in managed else None
+
+
+def _resolve_tool_route(full_name: str, args: dict) -> tuple[str, str, dict, dict] | None:
+    actual_args = dict(args)
+    for mid, info in registry.items():
+        split = info.get('split_map', {}).get(full_name)
+        if split:
+            actual_args['action'] = split['action']
+            return mid, split['tool'], actual_args, info
+
+    parts = full_name.split('__', 2)
+    if len(parts) != 3:
+        return None
+    _, mcp_id, tool_name = parts
+    info = registry.get(mcp_id)
+    if not info:
+        return None
+    return mcp_id, tool_name, actual_args, info
+
+
+def _validate_arguments(full_name: str, args: dict, info: dict) -> str | None:
+    input_schema = info.get('input_schemas', {}).get(full_name)
+    if not input_schema:
+        return None
+    try:
+        jsonschema.validate(instance=args, schema=input_schema)
+    except jsonschema.ValidationError as ve:
+        msg = f'参数校验失败: {ve.message}'
+        if ve.schema_path:
+            msg += f' (schema path: {"/".join(str(p) for p in ve.schema_path)})'
+        print(f'[mcp] {full_name} validation error: {msg}')
+        return msg
+    return None
+
+
 async def call_tool(full_name: str, args: dict) -> str:
+    """Call an MCP tool, applying trusted navigation execution orchestration."""
+    route = _resolve_tool_route(full_name, args)
+    if route is None:
+        return f'工具名格式错误或 MCP 未注册: {full_name}'
+    mcp_id, tool_name, actual_args, info = route
+    validation_error = _validate_arguments(full_name, args, info)
+    if validation_error:
+        return validation_error
+
+    control = info.get('tool_meta', {}).get(full_name, {}).get('execution_control')
+    action = str(actual_args.get('action', ''))
+    if isinstance(control, dict):
+        from navigation_execution import call_with_execution_lease
+
+        async def _invoke_raw(target_mcp_id: str, target_tool: str, call_args: dict):
+            target_name = (
+                full_name
+                if target_mcp_id == mcp_id and target_tool == tool_name
+                else f'mcp__{target_mcp_id}__{target_tool}'
+            )
+            # Driver start/stop are private control-plane lifecycle calls.  They
+            # are intentionally absent from the actuator's public business
+            # inputSchema, so validating them against that schema would reject
+            # Agent Core's own trusted lease binding.
+            trusted_driver_lifecycle = (
+                target_mcp_id != mcp_id or target_tool != tool_name
+            ) and call_args.get('action') in {'start', 'stop'}
+            return await _call_tool_raw(
+                target_name,
+                call_args,
+                validate_arguments=not trusted_driver_lifecycle,
+            )
+
+        return await call_with_execution_lease(
+            source_mcp_id=mcp_id,
+            source_tool=tool_name,
+            action=action,
+            arguments=actual_args,
+            control=control,
+            invoke=_invoke_raw,
+        )
+    return await _call_tool_raw(full_name, args)
+
+
+async def _call_tool_raw(
+    full_name: str,
+    args: dict,
+    *,
+    validate_arguments: bool = True,
+) -> str:
     """
     调用 MCP 工具。full_name 格式: 'mcp__<mcp_id>__<tool_name>'
     或拆分后的格式: 'mcp__<mcp_id>__<tool_name>__<action>'
@@ -299,27 +411,10 @@ async def call_tool(full_name: str, args: dict) -> str:
     返回工具结果的文本表示（用于填入 tool role 消息）。
     图片内容返回 OpenAI multi-modal list。
     """
-    # 优先查找 split_map（拆分工具的反向解析）
-    mcp_id = None
-    tool_name = None
-    for mid, info in registry.items():
-        split = info.get('split_map', {}).get(full_name)
-        if split:
-            mcp_id = mid
-            tool_name = split['tool']
-            args = {**args, 'action': split['action']}
-            break
-
-    if mcp_id is None:
-        # 原有逻辑：3-part split
-        parts = full_name.split('__', 2)
-        if len(parts) != 3:
-            return f'工具名格式错误: {full_name}'
-        _, mcp_id, tool_name = parts
-
-    info = registry.get(mcp_id)
-    if not info:
-        return f'MCP {mcp_id} 未注册'
+    route = _resolve_tool_route(full_name, args)
+    if route is None:
+        return f'工具名格式错误或 MCP 未注册: {full_name}'
+    mcp_id, tool_name, args, info = route
 
     # Internal tools (agentcore) — dispatch locally
     if info.get('transport') == 'internal':
@@ -335,16 +430,10 @@ async def call_tool(full_name: str, args: dict) -> str:
         args['_trace_id'] = trace_id  # _trace_id 保留给 driver（driver 需要）
 
     # ── 参数校验：按工具声明的 inputSchema 验证 LLM 生成的参数 ──────────────
-    input_schema = info.get('input_schemas', {}).get(full_name)
-    if input_schema:
-        try:
-            jsonschema.validate(instance=args, schema=input_schema)
-        except jsonschema.ValidationError as ve:
-            msg = f'参数校验失败: {ve.message}'
-            if ve.schema_path:
-                msg += f' (schema path: {"/".join(str(p) for p in ve.schema_path)})'
-            print(f'[mcp] {full_name} validation error: {msg}')
-            return msg
+    if validate_arguments:
+        validation_error = _validate_arguments(full_name, args, info)
+        if validation_error:
+            return validation_error
 
     # Auto-config: start 前自动 apply 已保存的 config
     action = args.get('action')

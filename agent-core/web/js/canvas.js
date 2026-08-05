@@ -1829,12 +1829,18 @@ async function _executeCard(el, mcpId, toolName, instanceId) {
   btn.disabled = true;
   btn.textContent = '执行中…';
 
+  const _mcp = _allMcps.find(m => m.id === mcpId);
+  const _toolObj = _mcp?.tools?.find(t => (typeof t === 'string' ? t : t.name) === toolName);
+  const _schemaProps = (typeof _toolObj === 'object' ? _toolObj.inputSchema : null)?.properties || {};
   const args = {};
   el.querySelectorAll('.canvas-field-input').forEach(input => {
+    const field = input.closest('.canvas-field');
+    if (field?.style.display === 'none') return;
     const key = input.dataset.key;
     const val = input.value.trim();
     if (val !== '') {
-      if (input.type === 'number') args[key] = Number(val);
+      const fieldSchema = _schemaProps[key] || {};
+      if (fieldSchema.type === 'number' || fieldSchema.type === 'integer' || input.type === 'number') args[key] = Number(val);
       else if (val === 'true') args[key] = true;
       else if (val === 'false') args[key] = false;
       else args[key] = val;
@@ -1847,9 +1853,6 @@ async function _executeCard(el, mcpId, toolName, instanceId) {
   // Auto-inject resolved topics from connected ports (based on schema, not DOM fields)
   const inPorts = [...el.querySelectorAll('.canvas-port.in')];
   const outPorts = [...el.querySelectorAll('.canvas-port.out')];
-  const _mcp = _allMcps.find(m => m.id === mcpId);
-  const _toolObj = _mcp?.tools?.find(t => (typeof t === 'string' ? t : t.name) === toolName);
-  const _schemaProps = (typeof _toolObj === 'object' ? _toolObj.inputSchema : null)?.properties || {};
   let inIdx = 0, outIdx = 0;
   for (const key of Object.keys(_schemaProps)) {
     if (args[key]) continue;

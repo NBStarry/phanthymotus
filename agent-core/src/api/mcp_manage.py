@@ -94,7 +94,7 @@ async def _ping_mcp_http(url: str) -> dict:
             async with session.post(url, json=tools_payload, headers=headers) as resp:
                 data = await resp.json(content_type=None)
                 tools = [
-                    {k: v for k, v in t.items() if k in ('name', 'description', 'type', 'multiInstance', 'inputSchema', 'configSchema', 'topic_out', 'topic_in')}
+                    {k: v for k, v in t.items() if k in ('name', 'description', 'type', 'multiInstance', 'inputSchema', 'configSchema', 'topic_out', 'topic_in', 'x-execution-control', 'x-topic-actions')}
                     for t in data.get('result', {}).get('tools', [])
                 ]
         except Exception as e:
@@ -512,6 +512,7 @@ async def _do_ping(mcp_id: str) -> dict:
     tool_meta_map = {}
     split_map = {}
     tool_groups = {}
+    input_schemas = {}
     for tool in caps['tools']:
         tool_schemas = mcp_client._to_openai_schema(mcp_id, tool)
 
@@ -520,21 +521,25 @@ async def _do_ping(mcp_id: str) -> dict:
             schemas[schema['name']] = schema
             raw_input_schema = tool.get('inputSchema') or {}
             action_enum = raw_input_schema.get('properties', {}).get('action', {}).get('enum')
+            input_schemas[schema['name']] = raw_input_schema or {'type': 'object', 'properties': {}}
             tool_meta_map[schema['name']] = {
                 'type': tool.get('type'),
                 'action_enum': action_enum,
                 'has_config_schema': bool(tool.get('configSchema')),
                 'completion': raw_input_schema.get('x-completion'),
+                'execution_control': tool.get('x-execution-control'),
             }
         else:
             group = []
             for schema in tool_schemas:
                 schemas[schema['name']] = schema
+                input_schemas[schema['name']] = schema.get('parameters', {'type': 'object', 'properties': {}})
                 tool_meta_map[schema['name']] = {
                     'type': tool.get('type'),
                     'action_enum': None,
                     'has_config_schema': bool(tool.get('configSchema')),
                     'completion': (tool.get('inputSchema') or {}).get('x-completion'),
+                    'execution_control': tool.get('x-execution-control'),
                 }
                 action_name = schema['name'].split('__')[-1]
                 split_map[schema['name']] = {
@@ -556,6 +561,7 @@ async def _do_ping(mcp_id: str) -> dict:
         'tool_meta':   tool_meta_map,
         'split_map':   split_map,
         'tool_groups': tool_groups,
+        'input_schemas': input_schemas,
     }
 
     # Notify inspection module about all topics from this device
@@ -871,6 +877,23 @@ async def mcp_call_tool(mcp_id: str, req: MCPCallRequest):
     target = next((m for m in mcps if m.get('id') == mcp_id), None)
     if not target:
         raise fastapi.HTTPException(status_code=404, detail='MCP not found')
+
+    # Canvas/UI calls and LLM calls must share the same trusted execution
+    # control plane. Lifecycle start/stop/info are not managed actions and
+    # continue through the ordinary MCP transport below.
+    action = str(req.arguments.get('action', ''))
+    managed_call = mcp_client.execution_control_for_call(
+        mcp_id, req.tool, action
+    )
+    if managed_call:
+        full_name, _ = managed_call
+        result = await mcp_client.call_tool(full_name, dict(req.arguments))
+        if isinstance(result, list):
+            return {'code': 200, 'data': result}
+        return {
+            'code': 200,
+            'data': [{'type': 'text', 'text': str(result)}],
+        }
 
     url = target.get('url', '')
     if not url or target.get('transport', 'http') != 'http':

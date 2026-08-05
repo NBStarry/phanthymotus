@@ -1,0 +1,17 @@
+ARG AGENT_CORE_BASE_IMAGE
+FROM ${AGENT_CORE_BASE_IMAGE}
+
+ARG IMAGE_TAG=g1-general-navigation1
+
+# Keep the released Core runtime intact and overlay only the trusted
+# navigation orchestration surface.
+COPY src/api/config.py /work/src/api/config.py
+COPY src/api/mcp_manage.py /work/src/api/mcp_manage.py
+COPY src/mcp_client.py /work/src/mcp_client.py
+COPY src/navigation_execution.py /work/src/navigation_execution.py
+COPY src/topic_action_routing.py /work/src/topic_action_routing.py
+COPY src/ros2_bridge.py /work/src/ros2_bridge.py
+COPY web/js/canvas.js /work/web/js/canvas.js
+
+ENV IMAGE_TAG=${IMAGE_TAG}
+RUN printf '%s\n' "${IMAGE_TAG}" > /work/VERSION

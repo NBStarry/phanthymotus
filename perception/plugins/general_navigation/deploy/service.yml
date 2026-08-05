@@ -1,0 +1,28 @@
+perception:
+  image: __IMAGE__
+  container_name: embodied-perception
+  network_mode: host
+  read_only: false
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,noexec,size=64m
+    - /root/.ros:rw,nosuid,nodev,noexec,size=32m
+  environment:
+    - CONFIG_PATH=/config/general-navigation.yaml
+    - AGENT_CORE_URL=https://localhost:15678
+    - ROS_DOMAIN_ID=42
+    - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+    - PYTHONUNBUFFERED=1
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 128
+  mem_limit: 512m
+  cpus: 1.0
+  logging:
+    driver: local
+    options:
+      max-size: "10m"
+      max-file: "3"
+  restart: "no"

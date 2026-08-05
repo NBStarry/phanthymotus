@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>G1 通用导航卡片 · Nav2-only 落地方案</title>
+  <style>
+    :root {
+      --ink:#17242d; --muted:#60717b; --line:#d9e2e5; --paper:#f3f7f6;
+      --card:#fff; --navy:#17394a; --teal:#087b73; --teal-soft:#dff3ef;
+      --blue:#376b88; --blue-soft:#e8f1f6; --amber:#b46613; --amber-soft:#fff0d9;
+      --green:#2e7d5b; --green-soft:#e4f4eb; --red:#a23c3c; --red-soft:#fae8e6;
+      --shadow:0 12px 36px rgba(23,36,45,.08);
+    }
+    *{box-sizing:border-box} html{scroll-behavior:smooth}
+    body{margin:0;color:var(--ink);background:radial-gradient(circle at 10% 0,rgba(8,123,115,.11),transparent 30rem),var(--paper);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.72}
+    code,pre{font-family:"SFMono-Regular",Consolas,monospace} code{padding:.12rem .34rem;border-radius:5px;background:#edf2f3;color:#174a58;font-size:.92em}
+    pre{overflow:auto;padding:1rem 1.15rem;border-radius:12px;background:#102d3a;color:#edf7f6;line-height:1.55} pre code{padding:0;background:transparent;color:inherit}
+    .layout{display:grid;grid-template-columns:250px minmax(0,1fr);min-height:100vh}
+    aside{position:sticky;top:0;height:100vh;padding:1.7rem 1.25rem;color:#d9e9ed;background:var(--navy);overflow:auto}
+    .brand{margin-bottom:1.3rem;padding-bottom:1.1rem;border-bottom:1px solid rgba(255,255,255,.14)}
+    .brand small{display:block;color:#79d0c7;font-size:.72rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}.brand strong{color:#fff;font-size:1.05rem}
+    nav a{display:block;margin:.12rem 0;padding:.45rem .65rem;border-left:2px solid transparent;color:#c7d9de;text-decoration:none;font-size:.84rem}
+    nav a:hover,nav a:focus{border-left-color:#79d0c7;background:rgba(255,255,255,.08);color:#fff}
+    .aside-note{margin-top:1.4rem;padding:.8rem;border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#bdd0d6;font-size:.75rem}
+    main{width:min(1180px,calc(100% - 3rem));margin:0 auto;padding:2.4rem 0 5rem} section{scroll-margin-top:1.5rem}
+    .hero{padding:clamp(2rem,5vw,4.4rem);border-radius:24px;color:#fff;background:linear-gradient(135deg,#163a4b,#0b716d 72%,#0b8679);box-shadow:var(--shadow)}
+    .eyebrow{margin:0 0 .5rem;color:#a8e2dc;font-size:.78rem;font-weight:800;letter-spacing:.15em;text-transform:uppercase}
+    h1{max-width:900px;margin:0;font-size:clamp(2rem,5vw,3.45rem);line-height:1.15;letter-spacing:-.035em}.lede{max-width:880px;margin:1.2rem 0 0;color:#e4f4f3;font-size:1.05rem}
+    .chips{display:flex;flex-wrap:wrap;gap:.55rem;margin-top:1.5rem}.chip{padding:.36rem .7rem;border:1px solid rgba(255,255,255,.24);border-radius:999px;background:rgba(255,255,255,.10);font-size:.78rem;font-weight:650}
+    h2{margin:3.6rem 0 1.1rem;color:var(--navy);font-size:clamp(1.5rem,3vw,2.08rem);line-height:1.25}h3{margin:1.4rem 0 .55rem;color:#204d5c}
+    .num{display:inline-grid;place-items:center;width:2rem;height:2rem;margin-right:.5rem;border-radius:50%;color:#fff;background:var(--teal);font-size:.9rem;vertical-align:.14rem}
+    .subtle{color:var(--muted)}.grid{display:grid;gap:1rem}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .card{padding:1.15rem 1.2rem;border:1px solid var(--line);border-radius:16px;background:var(--card);box-shadow:0 5px 18px rgba(23,36,45,.04)}.card h3{margin-top:0;font-size:1rem}.card p:last-child,.card ul:last-child{margin-bottom:0}
+    .metric{font-size:1.7rem;font-weight:800;color:var(--teal);line-height:1.2}.metric-label{display:block;margin-top:.35rem;color:var(--muted);font-size:.8rem}
+    .callout{margin:1.2rem 0;padding:1rem 1.15rem;border-left:4px solid var(--teal);border-radius:0 12px 12px 0;background:var(--teal-soft)}
+    .callout.warning{border-color:var(--amber);background:var(--amber-soft)}.callout.danger{border-color:var(--red);background:var(--red-soft)}.callout.success{border-color:var(--green);background:var(--green-soft)}
+    .table-wrap{overflow:auto;margin:1rem 0;border:1px solid var(--line);border-radius:13px;background:#fff}table{width:100%;border-collapse:collapse;min-width:760px}
+    th,td{padding:.78rem .86rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:.87rem}th{color:#34505e;background:#edf3f4;font-size:.77rem;white-space:nowrap}tbody tr:last-child td{border-bottom:0}
+    .status{display:inline-block;padding:.16rem .5rem;border-radius:999px;font-size:.72rem;font-weight:800;white-space:nowrap}.done{color:#226245;background:var(--green-soft)}.active{color:#08635e;background:var(--teal-soft)}.blocked{color:#8a4709;background:var(--amber-soft)}.later{color:#486270;background:var(--blue-soft)}
+    .diagram{overflow:auto;padding:1rem;border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:var(--shadow)}.diagram svg{display:block;min-width:1000px;width:100%;height:auto}
+    .diagram .box{fill:#fff;stroke:#8da6b1;stroke-width:1.5}.diagram .driver{fill:#dff3ef;stroke:#338d84}.diagram .nav2{fill:#e8f1f6;stroke:#4e7b91}.diagram .algo{fill:#fff0d9;stroke:#c17b31}.diagram .safe{fill:#fae8e6;stroke:#b55b58}.diagram .laterbox{fill:#f4f5f7;stroke:#87969e;stroke-dasharray:7 5}.diagram .group{fill:#fafcfc;stroke:#4e7b91;stroke-dasharray:8 6}.diagram .title{font-size:14px;font-weight:750;fill:#18313e}.diagram .meta{font-size:10.5px;fill:#59717d}.diagram .edge{fill:none;stroke:#55717c;stroke-width:2;marker-end:url(#arrow)}.diagram .dashed{stroke-dasharray:6 5}.diagram .label{font-size:10.5px;fill:#48626c}
+    .steps{display:grid;gap:.8rem}.step{position:relative;padding:1rem 1rem 1rem 4.6rem;border:1px solid var(--line);border-radius:13px;background:#fff}.step .date{position:absolute;left:.8rem;top:.92rem;width:3.2rem;text-align:center;padding:.22rem;border-radius:8px;color:#fff;background:var(--teal);font-size:.72rem;font-weight:800}
+    footer{margin-top:4rem;padding-top:1.2rem;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+    @media(max-width:980px){.layout{display:block}aside{position:relative;height:auto;padding:1rem 1.2rem}nav,.aside-note{display:none}main{width:min(100% - 1.5rem,900px);padding-top:.75rem}.grid.three{grid-template-columns:1fr}}
+    @media(max-width:680px){.grid.two{grid-template-columns:1fr}.hero{border-radius:16px}}
+    @media print{body{background:#fff}.layout{display:block}aside{display:none}main{width:100%;padding:0}.hero,.card,.diagram{box-shadow:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}.table-wrap{overflow:visible}table{min-width:0}}
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside aria-label="文档导航">
+      <div class="brand"><small>Phanthy Motus · Perception</small><strong>G1 通用导航</strong></div>
+      <nav>
+        <a href="#decision">01 当前决策</a>
+        <a href="#evidence">02 已有证据</a>
+        <a href="#architecture">03 Nav2-only 架构</a>
+        <a href="#interfaces">04 话题与 TF</a>
+        <a href="#gates">05 N1–N6 门禁</a>
+        <a href="#components">06 组件选型</a>
+        <a href="#boundary">07 仓库与安全边界</a>
+        <a href="#plan">08 DDL 与测试计划</a>
+        <a href="#enhancements">09 后续增强</a>
+        <a href="#next">10 立即下一步</a>
+      </nav>
+      <div class="aside-note">产品：通用导航<br>工具：general_navigation<br>规范：controlled_spatial<br>首版：Nav2-only<br>画布：1 张 Driver 卡 + 1 张导航卡<br>输入：兼容现有 Driver legacy payload<br>执行：现有 loco trusted actuator<br>编排：Agent Core 绑定 trusted nav_id<br>增强：FAST-LIVO2 / EGO later</div>
+    </aside>
+
+    <main>
+      <header class="hero">
+        <p class="eyebrow">Nav2-first delivery plan · 2026-08-05</p>
+        <h1>冻结 Driver + 通用导航两卡合同，跑通第一版 G1 Nav2 导航</h1>
+        <p class="lede">首版直接消费现有 Driver 卡的 <code>loco_state</code> JSON 与 <code>lidar_cloud</code> 二进制点云，在卡内以接收时间和配置 frame 补齐 ROS 语义；输出结构化 velocity proposal，由现有 <code>loco</code> actuator 执行。Agent Core 负责在启动导航前为同一任务绑定 trusted nav_id，并在项目停止时先确认 Driver 停车。Perception 只交付 <code>general_navigation</code>，内部使用 SLAM Toolbox、AMCL、NavFn 与 DWB。</p>
+        <div class="chips">
+          <span class="chip">existing-card canvas</span><span class="chip">14-action adapter</span><span class="chip">SLAM Toolbox + AMCL</span>
+          <span class="chip">NavFn + DWB Omni</span><span class="chip">ROS_DOMAIN_ID=42</span><span class="chip">FastDDS UDPv4</span>
+          <span class="chip">legacy payload adapter</span><span class="chip">Driver URDF extrinsic frozen</span><span class="chip">Driver main ready</span>
+        </div>
+      </header>
+
+      <section id="decision">
+        <h2><span class="num">1</span>决策重置</h2>
+        <div class="grid three">
+          <article class="card"><h3>首版完整能力</h3><p>Nav2 自己覆盖建图、定位、costmap、全局规划、局部控制、行为树、取消与恢复，因此 N1–N6 的第一版不再等待 FAST-LIVO2 或 EGO。</p></article>
+          <article class="card"><h3>冻结输入</h3><p>现有 Driver <code>/ubuntu/loco/state</code> JSON 转换为 Odometry/TF；<code>/ubuntu/lidar/cloud</code> 的 <code>&lt;point_step, point_count, raw points&gt;</code> envelope 重建 PointCloud2 并投影为 LaserScan。legacy payload 是首版正式输入。</p></article>
+          <article class="card"><h3>增强不改契约</h3><p>N6 基线通过后，FAST-LIVO2 只替换 odom source，EGO 只替换/对比 local controller。14-action 契约、nav_id 与安全边界不变。</p></article>
+        </div>
+        <div class="callout success"><strong>方案一现在的定义：</strong>Nav2-only 先形成能建图、重启定位、规划和输出安全 shadow 的完整卡片；FAST-LIVO2/EGO 不是首版成功条件。</div>
+      </section>
+
+      <section id="evidence">
+        <h2><span class="num">2</span>当前证据与已消除的传输阻塞</h2>
+        <div class="grid three">
+          <article class="card"><span class="metric">111 / 111</span><span class="metric-label">当前代码级回归</span><p>11 项 Agent Core、5 项 Core 部署、18 项 Perception、14 项 Perception 部署与 63 项 Nav2 通过；Driver main 上游另有 31 项通过。</p></article>
+          <article class="card"><span class="metric">card5</span><span class="metric-label">Nav2 Driver-input 候选</span><p>ARM64 镜像已构建，mapping、原子保存、localization 与 globalize 容器 smoke 通过；待 G1 上机升级。</p></article>
+          <article class="card"><span class="metric">gen5</span><span class="metric-label">Perception / Core 候选</span><p>Perception gen5 与 Agent Core ARM64 镜像 smoke 通过；画布精确三连线脚本已就绪，待两卡真机闭环。</p></article>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>上海 G1 只读项</th><th>实测结果</th><th>判定</th></tr></thead>
+          <tbody>
+            <tr><td>MID360 topic</td><td>现有 `/ubuntu/lidar/cloud` 为 UInt8 envelope：小端 `uint32 point_step` + `uint32 point_count` + raw points；adapter 严格校验长度，以 ROS 接收时间和配置的 `livox_frame` 补齐消息头</td><td><span class="status done">合同已适配</span></td></tr>
+            <tr><td>Driver odom source</td><td>现有 `/ubuntu/loco/state` JSON 提供 position、velocity、yaw_speed 与 IMU rpy；adapter 以 ROS 接收时间和固定 `odom_source` 合同生成 Odometry/TF</td><td><span class="status done">合同已适配</span></td></tr>
+            <tr><td>Unitree native odom</td><td>独立只读 subscriber 在 8 秒内收到 48 帧 `rt/odommodestate`</td><td><span class="status done">机器人源正常</span></td></tr>
+            <tr><td>Docker 跨容器</td><td>FastDDS `DEFAULT` 仅发现不送数；强制 `UDPv4` 后立即出样，约 8.4–8.7 Hz</td><td><span class="status done">已修正</span></td></tr>
+            <tr><td>Nav2 输出隔离</td><td>`cmd_vel_raw` → velocity smoother → `cmd_vel_shadow`；1 个 Twist publisher / 0 个 Twist subscriber。Agent Core 的 String 只读观察者不是执行器</td><td><span class="status done">安全</span></td></tr>
+            <tr><td>G1 shadow goal</td><td>目标 `(-0.424, 0.425)` 接受并取消；25 个 path pose；raw/shadow 峰值 0.0720 / 0.0150 m/s</td><td><span class="status done">N4 通过</span></td></tr>
+            <tr><td>G1 card companion</td><td>`g1-humble-nav2card3` 曾上线并验收；command/status heartbeat、N5 proposal 与完整 runtime audit 通过</td><td><span class="status done">N1–N5 shadow 基线</span></td></tr>
+            <tr><td>Perception Bundle</td><td>`g1-general-navigation3` 已上线；Core 唯一注册 `general_navigation` processor / 14 actions；Nav2 bridge subscriber=1</td><td><span class="status done">N1 通过</span></td></tr>
+            <tr><td>N3 真机</td><td>真实建图与六文件原子保存、断电恢复、331 × 354 地图加载、AMCL globalize 和 origin tag shadow goal 均通过</td><td><span class="status done">N3 通过</span></td></tr>
+            <tr><td>N5 shadow 链路</td><td>MCP 目标产生 sequence 12 / 250 ms 非零 proposal；显式停止后 sequence 13 以 `stopped` 零速收口，前后审计通过</td><td><span class="status done">ROS shadow 通过</span></td></tr>
+            <tr><td>Driver actuator</td><td><code>loco.start</code> 绑定 expected_nav_id 与唯一 proposal topic；Driver 校验 schema、sequence、TTL、frame、速度和终态，并由 <code>loco.stop</code> 返回 stop_confirmed</td><td><span class="status done">Driver main 已交付</span></td></tr>
+            <tr><td>Agent Core 编排</td><td>项目启动先发现精确三条画布边并启动 Driver lease，再启动导航卡；画布、API 与 LLM 共用同一 managed call path；项目 stop 先确认 Driver 停车</td><td><span class="status active">ARM64 smoke 通过，待部署</span></td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout success"><strong>纠偏结论：</strong>画布判断正确，Driver 数据一直正常。误判来自 shadow 容器的 FastDDS `DEFAULT` transport 在独立 Docker IPC namespace 间选择了不可用的数据路径；Nav2 sidecar 统一锁定 `UDPv4` 后，native odom Gate 已通过。</div>
+      </section>
+
+      <section id="architecture">
+        <h2><span class="num">3</span>Driver + general_navigation 两卡架构</h2>
+        <p class="subtle">虚线框内属于 <code>general_navigation</code> Perception 卡片；左侧两个输出端口和下游可信执行端都由现有 Driver 卡负责。Agent Core 从画布三条精确连线发现执行关系，为一次导航任务分配 trusted nav_id，并以 Driver 的私有 start/info/stop 生命周期守住物理执行边界。</p>
+        <div class="diagram" role="img" aria-label="G1 Nav2-only 通用导航卡片架构图">
+          <svg viewBox="0 0 1240 760" xmlns="http://www.w3.org/2000/svg">
+            <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#55717c"/></marker></defs>
+            <rect class="box driver" x="30" y="42" width="220" height="70" rx="12"/><text class="title" x="140" y="70" text-anchor="middle">Driver · loco_state</text><text class="meta" x="140" y="92" text-anchor="middle">legacy JSON · adapter receive time</text>
+            <rect class="box driver" x="30" y="158" width="220" height="70" rx="12"/><text class="title" x="140" y="186" text-anchor="middle">Driver · lidar_cloud</text><text class="meta" x="140" y="208" text-anchor="middle">&lt;II&gt; envelope · configured frame</text>
+            <rect class="group" x="285" y="24" width="925" height="610" rx="18"/><text class="title" x="310" y="55">general_navigation adapter + Nav2 companion · N1–N5 protocol</text>
+            <rect class="box nav2" x="320" y="82" width="205" height="72" rx="12"/><text class="title" x="423" y="110" text-anchor="middle">native odom bridge</text><text class="meta" x="423" y="132" text-anchor="middle">Odometry + odom→base_link</text>
+            <rect class="box nav2" x="320" y="188" width="205" height="72" rx="12"/><text class="title" x="423" y="216" text-anchor="middle">cloud decoder + scan</text><text class="meta" x="423" y="238" text-anchor="middle">validate legacy → PointCloud2/LaserScan</text>
+            <rect class="box algo" x="575" y="82" width="220" height="72" rx="12"/><text class="title" x="685" y="110" text-anchor="middle">mapping</text><text class="meta" x="685" y="132" text-anchor="middle">SLAM Toolbox · /map · map→odom</text>
+            <rect class="box algo" x="575" y="188" width="220" height="72" rx="12"/><text class="title" x="685" y="216" text-anchor="middle">localization</text><text class="meta" x="685" y="238" text-anchor="middle">Map Server + AMCL · map→odom</text>
+            <rect class="box nav2" x="845" y="82" width="320" height="72" rx="12"/><text class="title" x="1005" y="110" text-anchor="middle">JSON bridge / NavigateToPose</text><text class="meta" x="1005" y="132" text-anchor="middle">nav_id · status · feedback · cancel · recovery</text>
+            <rect class="box nav2" x="845" y="188" width="145" height="72" rx="12"/><text class="title" x="918" y="216" text-anchor="middle">NavFn</text><text class="meta" x="918" y="238" text-anchor="middle">global path</text>
+            <rect class="box nav2" x="1020" y="188" width="145" height="72" rx="12"/><text class="title" x="1093" y="216" text-anchor="middle">DWB Omni</text><text class="meta" x="1093" y="238" text-anchor="middle">vx / vy / wz</text>
+            <rect class="box nav2" x="575" y="338" width="220" height="72" rx="12"/><text class="title" x="685" y="366" text-anchor="middle">local / global costmaps</text><text class="meta" x="685" y="388" text-anchor="middle">scan · footprint · inflation</text>
+            <rect class="box nav2" x="845" y="338" width="145" height="72" rx="12"/><text class="title" x="918" y="366" text-anchor="middle">cmd_vel_raw</text><text class="meta" x="918" y="388" text-anchor="middle">card internal</text>
+            <rect class="box nav2" x="1020" y="338" width="145" height="72" rx="12"/><text class="title" x="1093" y="366" text-anchor="middle">velocity smoother</text><text class="meta" x="1093" y="388" text-anchor="middle">limits + timeout</text>
+            <rect class="box safe" x="845" y="470" width="320" height="68" rx="12"/><text class="title" x="1005" y="497" text-anchor="middle">cmd_vel_shadow · raw Twist</text><text class="meta" x="1005" y="519" text-anchor="middle">only internal proposal wrapper may subscribe</text>
+            <rect class="box safe" x="845" y="560" width="320" height="62" rx="12"/><text class="title" x="1005" y="585" text-anchor="middle">velocity_proposal · JSON v1</text><text class="meta" x="1005" y="606" text-anchor="middle">nav_id · sequence · 250 ms TTL → existing loco</text>
+            <rect class="box safe" x="845" y="642" width="210" height="70" rx="12"/><text class="title" x="950" y="670" text-anchor="middle">Driver · loco actuator · N5</text><text class="meta" x="950" y="692" text-anchor="middle">nav_id · TTL · watchdog · stop</text>
+            <rect class="box driver" x="1090" y="642" width="120" height="70" rx="12"/><text class="title" x="1150" y="670" text-anchor="middle">G1</text><text class="meta" x="1150" y="692" text-anchor="middle">main control</text>
+            <rect class="box laterbox" x="30" y="320" width="220" height="68" rx="12"/><text class="title" x="140" y="347" text-anchor="middle">E1 FAST-LIVO2</text><text class="meta" x="140" y="369" text-anchor="middle">after N6 · replace odom source</text>
+            <rect class="box laterbox" x="30" y="430" width="220" height="68" rx="12"/><text class="title" x="140" y="457" text-anchor="middle">E2 EGO-Planner</text><text class="meta" x="140" y="479" text-anchor="middle">after N6 · compare/replace DWB</text>
+            <path class="edge" d="M250 77H320"/><path class="edge" d="M250 193H320"/>
+            <path class="edge" d="M525 118H575"/><path class="edge" d="M525 224H575"/><path class="edge" d="M525 224V374H575"/>
+            <path class="edge dashed" d="M685 154V188"/><text class="label" x="697" y="176">mode switch</text>
+            <path class="edge" d="M795 118H845"/><path class="edge" d="M795 224H845"/><path class="edge" d="M795 374H918V260"/>
+            <path class="edge" d="M990 224H1020"/><path class="edge" d="M1093 260V338"/><path class="edge" d="M990 374H1020"/><path class="edge" d="M1093 410V470"/>
+            <path class="edge" d="M1005 538V560"/><path class="edge dashed" d="M1005 622V642"/><text class="label" x="1015" y="638">Core 绑定同一 trusted nav_id</text><path class="edge" d="M1055 677H1090"/>
+            <path class="edge dashed" d="M250 354H285V118H320"/><path class="edge dashed" d="M250 464H285V224H1020"/>
+          </svg>
+        </div>
+      </section>
+
+      <section id="interfaces">
+        <h2><span class="num">4</span>话题、TF 与模式互斥</h2>
+        <pre><code>map → odom → base_link → &lt;Driver pointcloud frame_id&gt;</code></pre>
+        <div class="table-wrap"><table>
+          <thead><tr><th>接口</th><th>owner / frame</th><th>用途与 Gate</th></tr></thead>
+          <tbody>
+            <tr><td>`/ubuntu/loco/state`</td><td>Driver / legacy JSON</td><td>position、velocity、yaw_speed、IMU rpy；adapter 用 ROS 接收时间与配置 frame 生成 odom，接收年龄超过 500 ms 即 fail closed</td></tr>
+            <tr><td>`/ubuntu/navigation/nav2/odom`</td><td>native bridge / `odom`</td><td>明确标注 <code>timestamp_source=adapter_receive</code> 与 <code>frame_source=adapter_contract</code>，同时广播 `odom→base_link`</td></tr>
+            <tr><td>`/ubuntu/lidar/cloud`</td><td>Driver / legacy UInt8 envelope</td><td>严格解析小端 <code>&lt;II&gt;</code> header 和 raw points，禁止长度不匹配、越界与隐式猜测</td></tr>
+            <tr><td>`/ubuntu/navigation/nav2/scan`</td><td>pointcloud adapter / configured `livox_frame`</td><td>供 SLAM Toolbox、AMCL 与 Nav2 costmaps 共用；接收年龄超过 500 ms 即 fail closed</td></tr>
+            <tr><td>`/ubuntu/navigation/nav2/command`</td><td>Perception backend / reliable JSON</td><td>14-action 请求入口；companion 持有 Nav2 action 类型</td></tr>
+            <tr><td>`/ubuntu/navigation/nav2/status`</td><td>Nav2 companion / transient-local JSON</td><td>heartbeat、response 与 navigation progress；始终声明 shadow-only</td></tr>
+            <tr><td>`/map` + `map→odom`</td><td>mapping: SLAM Toolbox<br>localization: Map Server + AMCL</td><td>两种模式互斥，绝不同时广播 `map→odom`</td></tr>
+            <tr><td>`cmd_vel_raw`</td><td>Nav2 卡片内部</td><td>controller / behaviors 到 velocity smoother 的内部话题</td></tr>
+            <tr><td>`cmd_vel_shadow`</td><td>velocity smoother</td><td>内部 raw Twist，不再作为公共 topic_out；当前 card3 只有内部 wrapper 订阅。旧 Core String 观察者不能消费 Twist</td></tr>
+            <tr><td>`velocity_proposal`</td><td>Nav2 proposal wrapper / JSON</td><td>携带 nav_id、递增 sequence 与最大 250 ms TTL；可允许 Agent Core 只读观察，产品就绪时必须恰有 1 个预期的 `loco` Driver subscriber</td></tr>
+            <tr><td>`loco.start/info/stop`</td><td>Driver 私有生命周期 / Agent Core managed route</td><td>start 绑定唯一 topic 和 trusted nav_id；info 证明 armed/connected；stop 必须确认 idle、disconnected、stop_confirmed 后才释放项目</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout warning"><strong>外参门禁：</strong><code>base_link→livox_frame</code> 已从 Driver main <code>cfb8efe</code> 的 <code>g1_model.urdf</code> 冻结为 pelvis / zero-waist 名义链 <code>(-0.00368, 0.00003, 0.46018, 0, 0.04014257279586953, 0)</code>。owner 脚本同时校验数值与来源标记；零值只允许离线合成 smoke。</div>
+      </section>
+
+      <section id="gates">
+        <h2><span class="num">5</span>N1–N6 单卡片门禁</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>阶段</th><th>交付</th><th>验收 Gate</th><th>当前</th></tr></thead>
+          <tbody>
+            <tr><td>N1 契约/运行壳</td><td>14 action、nav_id、cancel/timeout、companion lifecycle</td><td>精确 schema 与 Perception loader 注册</td><td><span class="status done">Bundle + Core 注册通过</span></td></tr>
+            <tr><td>N2 原生输入</td><td>legacy odom bridge、cloud scan adapter、接收时间/TF/新鲜度诊断</td><td>真实 odom/scan/TF 连续，时间来源、frame 来源与 Driver URDF 名义外参可审计</td><td><span class="status active">card5 ARM64 smoke 通过，待真机复验</span></td></tr>
+            <tr><td>N3 地图/定位</td><td>SLAM Toolbox 建图、原子保存、tag，Map Server + AMCL 重启定位</td><td>真实地图可恢复，`map→odom` 单 owner</td><td><span class="status done">G1 真实地图与重定位通过</span></td></tr>
+            <tr><td>N4 Nav2 shadow</td><td>costmaps、BT Navigator、NavFn、DWB、smoother</td><td>goal → path → shadow，取消/超时/遇障可观测</td><td><span class="status done">G1 shadow Gate 已通过</span></td></tr>
+            <tr><td>N5 执行</td><td>structured proposal + Driver actuator + trusted nav_id/TTL/lease/E-stop</td><td>画布精确三连线、Driver armed/connected、终态停车确认与 nav_id 退休均通过</td><td><span class="status active">Driver/Core 代码就绪，待真机闭环</span></td></tr>
+            <tr><td>N6 闭环</td><td>地图、定位、规划、动作、日志/录像共用 nav_id</td><td>多 POI、重定位、动态障碍、故障注入</td><td><span class="status later">未开始</span></td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section id="components">
+        <h2><span class="num">6</span>首版成熟组件选型</h2>
+        <div class="grid three">
+          <article class="card"><h3>SLAM Toolbox / AMCL</h3><p>建图时由 SLAM Toolbox 产生 `/map` 与 `map→odom`；保存地图后切 Map Server + AMCL。模式切换比同时叠加两个 TF owner 更可验证。</p></article>
+          <article class="card"><h3>NavFn</h3><p>首版室内平地 occupancy grid 直接使用 NavFn，避免在 DDL 前同时调参 Smac 的多模型能力。跨房间全局路径已足够。</p></article>
+          <article class="card"><h3>DWB Omni</h3><p>DWB 在 Nav2 Humble 成熟可用，支持全向底盘采样。首版限速 `vx≤0.15 m/s`、`|vy|≤0.12 m/s`、`|wz|≤0.35 rad/s`，仅输出 shadow。</p></article>
+        </div>
+        <div class="callout"><strong>MVP 场景：</strong>室内平地二维 / 2.5D 导航。楼梯、明显崎岖地面、原生三维多楼层不在 08-06 开发冻结范围。</div>
+      </section>
+
+      <section id="boundary">
+        <h2><span class="num">7</span>Perception / Driver 与安全边界</h2>
+        <div class="grid two">
+          <article class="card"><h3>Perception 拥有</h3><ul><li>`general_navigation` 工具与 `controlled_spatial` 规范实现</li><li>Nav2 容器、地图/定位、规划、任务状态与 shadow</li><li>N1–N6 门禁、诊断、故障结果和验收证据</li></ul></article>
+          <article class="card"><h3>G1 Driver 拥有</h3><ul><li>Unitree DDS 与 MID360 / 机身状态的标准 topic 适配</li><li>主运控、急停、姿态、租约、TTL 与有限时长高层运动</li><li>N5 后唯一物理 executor；不保存地图，只在有效租约内绑定 nav_id</li></ul></article>
+        </div>
+        <div class="callout danger"><strong>红线：</strong>Perception 不导入 Unitree SDK，不直接调 SmartMotion，不把 Nav2/EGO 直连物理速度话题。Driver 永不订阅 raw shadow；最终画布只允许精确 1 个预期的 `loco` subscriber 订阅 structured proposal，实验 executor 必须在产品验收前移除。</div>
+      </section>
+
+      <section id="plan">
+        <h2><span class="num">8</span>08-06 开发冻结与后续测试窗口</h2>
+        <div class="steps">
+          <div class="step"><span class="date">08-04</span><strong>N1/N2/N3/N4 代码 Gate 已成</strong>：14-action adapter、N3 原子地图库、mapping → localization e2e、ARM64 card2 和真实 shadow 基线均已通过。</div>
+          <div class="step"><span class="date">08-05</span><strong>N3 owner 上机验收已通过</strong>：手动升级 card2/general-navigation2，人工遥控建图，保存 occupancy + pose graph；断电恢复后加载地图，并在原点不确定时用 AMCL globalize 收敛，最终验证 tag goal。</div>
+          <div class="step"><span class="date">08-06</span><strong>两卡合同联调</strong>：冻结 14-action、地图格式、现有两路 Driver legacy 输入、Driver URDF 名义外参、N5 proposal 与 trusted nav_id 生命周期；完成 card5/gen5/Core build、画布三连线和 G1 真机闭环。</div>
+          <div class="step"><span class="date">08-10</span><strong>地图/重定位回归</strong>：人工驾驶建图、保存 occupancy/pose graph，重启后 Map Server + AMCL 恢复 `map→odom`。</div>
+          <div class="step"><span class="date">08-11</span><strong>Nav2 shadow 调试</strong>：动态障碍、窄通道、阻塞、恢复树、pause/resume/stop 和传感器过期清零。</div>
+          <div class="step"><span class="date">08-12</span><strong>有条件低速执行</strong>：仅 N3/N4/N5 证据齐全时，由 owner 在有人值守环境按 0.05 → 0.15 m/s 分级测试；否则继续 shadow。</div>
+        </div>
+      </section>
+
+      <section id="enhancements">
+        <h2><span class="num">9</span>N6 之后的两个增强位</h2>
+        <div class="grid two">
+          <article class="card"><h3>E1 · FAST-LIVO2 odom enhancement</h3><p>仅在 Nav2-only 基线证明可导航后，将 native odom bridge 替换为 FAST-LIVO2 `Odometry + odom→base_link`。需用同场轨迹对比漂移、抖动、CPU/内存与重定位效果，可随时退回 native source。</p></article>
+          <article class="card"><h3>E2 · EGO-Planner controller enhancement</h3><p>先作为 DWB 的独立 comparator，消费同一 local subgoal/odom/obstacles，输出不可执行的独立 shadow。只有安全性、成功率和资源占用全部更优时才讨论替换 DWB。</p></article>
+        </div>
+      </section>
+
+      <section id="next">
+        <h2><span class="num">10</span>立即下一步</h2>
+        <div class="steps">
+          <div class="step"><span class="date">DONE</span><strong>N1–N4 真机基线完成</strong>：两个 ARM64 shadow 容器已升级，真实地图/tag 持久化、断电恢复、AMCL globalize 与可取消 tag goal 全部通过。</div>
+          <div class="step"><span class="date">DONE</span><strong>N5 v1 协议与参考门禁完成</strong>：公开动作仍为 14 个；proposal 带 nav_id/sequence/TTL，故障统一归零并要求停止确认。</div>
+          <div class="step"><span class="date">DONE</span><strong>N5 shadow 版本已上线</strong>：`card3/general-navigation3` 分阶段升级完成；localization 与 active map 保留，proposal 只有 Core 只读观察者，0 Driver subscriber。</div>
+          <div class="step"><span class="date">DONE</span><strong>MCP shadow goal 端到端通过</strong>：安全非零目标、nav_id/sequence/250 ms TTL、显式停止与终态零速 proposal 全部完成，全程 0 Driver subscriber。</div>
+          <div class="step"><span class="date">DONE</span><strong>已有 Driver 高层运动 RPC 已直接验证</strong>：G1 能实际移动并停止，证明无需重做底层 Driver。</div>
+          <div class="step"><span class="date">DONE</span><strong>card5/general-navigation5 代码审查整改完成</strong>：实际 Driver legacy 输入、Driver URDF 名义外参、10Hz readiness、地图保存有界重试、终态停车和 trusted nav_id 门禁已固化；当前 111/111 项通过。</div>
+          <div class="step"><span class="date">DONE</span><strong>Driver main 执行合同已交付</strong>：<code>loco</code> actuator 消费结构化 proposal，并实现 expected_nav_id、递增 sequence、250 ms TTL、限速、watchdog、急停和停车确认。</div>
+          <div class="step"><span class="date">DONE</span><strong>联调候选已构建</strong>：Driver main、Agent Core、Nav2 card5 与 Perception gen5 均已得到 ARM64 镜像；Core / Perception / Nav2 容器 smoke 通过。</div>
+          <div class="step"><span class="date">NEXT</span><strong>分阶段上机升级</strong>：机器人在线后按 Driver → Agent Core → Nav2 card5 → Perception gen5 顺序逐步 preflight/升级，每步都保留 rollback。</div>
+          <div class="step"><span class="date">NEXT</span><strong>两卡画布验收</strong>：连接 `loco_state → general_navigation.loco_state`、`lidar_cloud → general_navigation.lidar`、`general_navigation.velocity_proposal → loco.velocity_proposal`；从画布或统一 API 下发目标，验证实际到达、终态零速、pause 后 nav_id 退休以及项目 stop 停车。</div>
+        </div>
+        <pre><code>cd perception/plugins/general_navigation/nav2
+./scripts/test.sh
+./scripts/loco-integration-readiness.sh
+STAGE=preflight ./scripts/owner-loco-card-acceptance.sh
+I_AM_G1_OWNER=1 I_HAVE_G1_REMOTE=1 STAGE=move \
+  ./scripts/owner-loco-card-acceptance.sh</code></pre>
+        <div class="callout warning"><strong>启动策略：</strong>当前不加 crontab，Docker 保持 `restart=no`。掉电或切换地图后由 owner 手动启动，并显式选择 mapping 或 localization runtime。</div>
+        <div class="callout warning"><strong>产品验收缺口：</strong>当前 111/111 项代码级测试、镜像 smoke、既有 shadow 证据和 Driver 直动证据仍不等于两卡闭环通过。剩余工作是上机部署四个候选、在画布上形成精确三连线，然后验证目标到达、终态零速、trusted nav_id 生命周期与项目 stop 停车。</div>
+        <div class="callout"><strong>官方依据：</strong>Nav2 要求 Odometry 消息与 `odom→base_link` TF；可在 mapping 时运行 navigation stack + SLAM Toolbox，保存地图后使用 AMCL；DWB 支持 omnidirectional 运动模型。本方案没有自研替代这些成熟组件。</div>
+      </section>
+
+      <footer>产品名：通用导航 · 工具标识：<code>general_navigation</code> · 规范：<code>controlled_spatial</code> · 首版：Nav2-only · 分支：<code>feat/general-navigation-perception</code></footer>
+    </main>
+  </div>
+</body>
+</html>
