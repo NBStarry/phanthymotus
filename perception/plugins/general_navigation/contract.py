@@ -91,12 +91,12 @@ def _root(namespace: str) -> str:
     return f"/{normalized}" if normalized else ""
 
 
-def general_navigation_tool_definition(namespace: str) -> dict:
+def navigation2_tool_definition(namespace: str) -> dict:
     """Return an isolated tool definition for one robot namespace."""
 
     root = _root(namespace)
     tool = {
-        "name": "navigation",
+        "name": "navigation2",
         "displayName": "Navigation 2",
         "type": "processor",
         "multiInstance": False,

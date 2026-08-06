@@ -19,7 +19,7 @@ from api import mcp_manage
 
 PROPOSAL_SCHEMA = "phanthy.navigation.velocity_proposal.v1"
 PROPOSAL_TOPIC = "/ubuntu/navigation/nav2/velocity_proposal"
-FULL_NAME = "mcp__perception__general_navigation__navigate_to_pose"
+FULL_NAME = "mcp__perception__navigation2__navigate_to_pose"
 CONTROL = {
     "proposal_schema": PROPOSAL_SCHEMA,
     "output_port": "velocity_proposal",
@@ -46,7 +46,7 @@ def fixture():
             {
                 "id": "nav-card",
                 "mcpId": "perception",
-                "toolName": "general_navigation",
+                "toolName": "navigation2",
                 "topicOut": [port],
             },
             {
@@ -73,7 +73,7 @@ def fixture():
             "url": "http://perception.invalid/mcp",
             "tools": [
                 {
-                    "name": "general_navigation",
+                    "name": "navigation2",
                     "type": "processor",
                     "x-execution-control": CONTROL,
                     "topic_out": [port],
@@ -108,7 +108,7 @@ class MCPNavigationRoutingTest(unittest.IsolatedAsyncioTestCase):
                     "url": "http://perception.invalid/mcp",
                     "split_map": {
                         FULL_NAME: {
-                            "tool": "general_navigation",
+                            "tool": "navigation2",
                             "action": "navigate_to_pose",
                         }
                     },
@@ -212,7 +212,7 @@ class MCPNavigationRoutingTest(unittest.IsolatedAsyncioTestCase):
             result = await mcp_manage.mcp_call_tool(
                 "perception",
                 mcp_manage.MCPCallRequest(
-                    tool="general_navigation",
+                    tool="navigation2",
                     arguments={
                         "action": "navigate_to_pose",
                         "x": 1.0,
@@ -229,7 +229,7 @@ class MCPNavigationRoutingTest(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_tools_endpoint_does_not_require_call_request(self):
-        tools = [{"name": "general_navigation"}]
+        tools = [{"name": "navigation2"}]
         with mock.patch.object(
             mcp_manage,
             "_get_mcp_list",

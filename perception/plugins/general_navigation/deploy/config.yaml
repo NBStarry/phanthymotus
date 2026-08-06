@@ -3,7 +3,7 @@ ws_port: 15721
 ws_enabled: false
 
 plugins:
-  general_navigation:
+  navigation2:
     enabled: true
     namespace: ubuntu
     backend: ros_topic

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Probe general_navigation on a shared Perception MCP endpoint."""
+"""Probe navigation2 on a shared Perception MCP endpoint."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def initialize() -> dict:
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
                     "clientInfo": {
-                        "name": "general-navigation-probe",
+                        "name": "navigation2-probe",
                         "version": "1",
                     },
                 },
@@ -81,7 +81,7 @@ def read_info(expect_bridge: bool) -> dict:
         result = rpc(
             "tools/call",
             {
-                "name": "general_navigation",
+                "name": "navigation2",
                 "arguments": {"action": "info"},
             },
             3,
@@ -102,7 +102,7 @@ def main() -> None:
     assert initialized["serverInfo"]["name"] == "perception-bundle"
 
     tools = rpc("tools/list", {}, 2)["tools"]
-    matches = [tool for tool in tools if tool.get("name") == "general_navigation"]
+    matches = [tool for tool in tools if tool.get("name") == "navigation2"]
     assert len(matches) == 1, matches
     tool = matches[0]
     assert tool["type"] == "processor", tool

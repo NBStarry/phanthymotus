@@ -12,7 +12,9 @@ import urllib.request
 import uuid
 
 
-MANAGED_TOOLS = ("loco_state", "lidar_cloud", "general_navigation", "loco")
+NAVIGATION_TOOL = "navigation2"
+LEGACY_NAVIGATION_TOOL = "general_navigation"
+MANAGED_TOOLS = ("loco_state", "lidar_cloud", NAVIGATION_TOOL, "loco")
 STATE_TOPIC = "/ubuntu/loco/state"
 LIDAR_TOPIC = "/ubuntu/lidar/cloud"
 PROPOSAL_TOPIC = "/ubuntu/navigation/nav2/velocity_proposal"
@@ -90,7 +92,12 @@ def port_index(ports: list, *, topic: str = "", port: str = "") -> int:
 def build_layout(layout: dict, tools: dict[str, tuple[dict, dict]]) -> dict:
     cards = [dict(card) for card in layout.get("cards") or []]
     existing_navigation = next(
-        (card for card in cards if card.get("toolName") == "general_navigation"),
+        (
+            card
+            for card in cards
+            if card.get("toolName")
+            in {NAVIGATION_TOOL, LEGACY_NAVIGATION_TOOL}
+        ),
         None,
     )
     preserved_goal_connections = []
@@ -116,12 +123,17 @@ def build_layout(layout: dict, tools: dict[str, tuple[dict, dict]]) -> dict:
     positions = {
         "loco_state": (base_x, 80.0),
         "lidar_cloud": (base_x, 300.0),
-        "general_navigation": (base_x + 340.0, 190.0),
+        NAVIGATION_TOOL: (base_x + 340.0, 190.0),
         "loco": (base_x + 680.0, 190.0),
     }
 
     for name in MANAGED_TOOLS:
-        matches = [card for card in cards if card.get("toolName") == name]
+        aliases = (
+            {NAVIGATION_TOOL, LEGACY_NAVIGATION_TOOL}
+            if name == NAVIGATION_TOOL
+            else {name}
+        )
+        matches = [card for card in cards if card.get("toolName") in aliases]
         assert len(matches) <= 1, f"duplicate {name} canvas cards"
         mcp, tool = tools[name]
         if matches:
@@ -173,10 +185,10 @@ def build_layout(layout: dict, tools: dict[str, tuple[dict, dict]]) -> dict:
             }
         )
 
-    connect("loco_state", "general_navigation", STATE_TOPIC)
-    connect("lidar_cloud", "general_navigation", LIDAR_TOPIC)
+    connect("loco_state", NAVIGATION_TOOL, STATE_TOPIC)
+    connect("lidar_cloud", NAVIGATION_TOOL, LIDAR_TOPIC)
     connect(
-        "general_navigation",
+        NAVIGATION_TOOL,
         "loco",
         PROPOSAL_TOPIC,
         source_port="velocity_proposal",
@@ -199,12 +211,12 @@ def build_layout(layout: dict, tools: dict[str, tuple[dict, dict]]) -> dict:
         source_output = source_outputs[source_index]
         assert source_output.get("schema") == GOAL_SCHEMA, source_output
         goal_target_index = port_index(
-            selected["general_navigation"]["topicIn"], port="goal_pose"
+            selected[NAVIGATION_TOOL]["topicIn"], port="goal_pose"
         )
         connections.append(
             {
                 **previous,
-                "toCardId": selected["general_navigation"]["id"],
+                "toCardId": selected[NAVIGATION_TOOL]["id"],
                 "toPortIdx": goal_target_index,
                 "format": source_output.get("format", "data/json"),
                 "fromTopic": previous.get("fromTopic")
@@ -236,9 +248,9 @@ def validate(layout: dict) -> None:
         selected[name] = matches[0]
 
     required = {
-        (selected["loco_state"]["id"], selected["general_navigation"]["id"], STATE_TOPIC),
-        (selected["lidar_cloud"]["id"], selected["general_navigation"]["id"], LIDAR_TOPIC),
-        (selected["general_navigation"]["id"], selected["loco"]["id"], PROPOSAL_TOPIC),
+        (selected["loco_state"]["id"], selected[NAVIGATION_TOOL]["id"], STATE_TOPIC),
+        (selected["lidar_cloud"]["id"], selected[NAVIGATION_TOOL]["id"], LIDAR_TOPIC),
+        (selected[NAVIGATION_TOOL]["id"], selected["loco"]["id"], PROPOSAL_TOPIC),
     }
     actual = {
         (

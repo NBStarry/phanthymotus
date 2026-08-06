@@ -50,15 +50,15 @@ def main() -> None:
         ]
         if len(matches) == 1:
             tools = matches[0].get("tools") or []
-            if any(tool.get("name") == "general_navigation" for tool in tools):
+            if any(tool.get("name") == "navigation2" for tool in tools):
                 match = matches[0]
                 break
         time.sleep(0.5)
 
     if match is None:
-        raise AssertionError("general_navigation was not discovered in Agent Core")
+        raise AssertionError("navigation2 was not discovered in Agent Core")
 
-    tools = [tool for tool in match["tools"] if tool.get("name") == "general_navigation"]
+    tools = [tool for tool in match["tools"] if tool.get("name") == "navigation2"]
     assert len(tools) == 1, tools
     tool = tools[0]
     assert tool.get("type") == "processor", tool

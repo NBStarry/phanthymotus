@@ -64,14 +64,14 @@
         <a href="#enhancements">09 后续增强</a>
         <a href="#next">10 立即下一步</a>
       </nav>
-      <div class="aside-note">产品：通用导航<br>工具：general_navigation<br>规范：controlled_spatial<br>首版：Nav2-only<br>画布：1 张 Driver 卡 + 1 张导航卡<br>输入：兼容现有 Driver legacy payload<br>执行：现有 loco trusted actuator<br>编排：Agent Core 绑定 trusted nav_id<br>增强：FAST-LIVO2 / EGO later</div>
+      <div class="aside-note">产品：Navigation 2<br>工具：navigation2<br>规范：controlled_spatial<br>首版：Nav2-only<br>画布：1 张 Driver 卡 + 1 张导航卡<br>输入：兼容现有 Driver legacy payload<br>执行：现有 loco trusted actuator<br>编排：Agent Core 绑定 trusted nav_id<br>增强：FAST-LIVO2 / EGO later</div>
     </aside>
 
     <main>
       <header class="hero">
         <p class="eyebrow">Nav2-first delivery plan · 2026-08-05</p>
         <h1>冻结 Driver + 通用导航两卡合同，跑通第一版 G1 Nav2 导航</h1>
-        <p class="lede">首版直接消费现有 Driver 卡的 <code>loco_state</code> JSON 与 <code>lidar_cloud</code> 二进制点云，在卡内以接收时间和配置 frame 补齐 ROS 语义；输出结构化 velocity proposal，由现有 <code>loco</code> actuator 执行。Agent Core 负责在启动导航前为同一任务绑定 trusted nav_id，并在项目停止时先确认 Driver 停车。Perception 只交付 <code>general_navigation</code>，内部使用 SLAM Toolbox、AMCL、NavFn 与 DWB。</p>
+        <p class="lede">首版直接消费现有 Driver 卡的 <code>loco_state</code> JSON 与 <code>lidar_cloud</code> 二进制点云，在卡内以接收时间和配置 frame 补齐 ROS 语义；输出结构化 velocity proposal，由现有 <code>loco</code> actuator 执行。Agent Core 负责在启动导航前为同一任务绑定 trusted nav_id，并在项目停止时先确认 Driver 停车。Perception 交付 <code>navigation2</code>，内部使用 SLAM Toolbox、AMCL、NavFn 与 DWB。</p>
         <div class="chips">
           <span class="chip">existing-card canvas</span><span class="chip">14-action adapter</span><span class="chip">SLAM Toolbox + AMCL</span>
           <span class="chip">NavFn + DWB Omni</span><span class="chip">ROS_DOMAIN_ID=42</span><span class="chip">FastDDS UDPv4</span>
@@ -106,7 +106,7 @@
             <tr><td>Nav2 输出隔离</td><td>`cmd_vel_raw` → velocity smoother → `cmd_vel_shadow`；1 个 Twist publisher / 0 个 Twist subscriber。Agent Core 的 String 只读观察者不是执行器</td><td><span class="status done">安全</span></td></tr>
             <tr><td>G1 shadow goal</td><td>目标 `(-0.424, 0.425)` 接受并取消；25 个 path pose；raw/shadow 峰值 0.0720 / 0.0150 m/s</td><td><span class="status done">N4 通过</span></td></tr>
             <tr><td>G1 card companion</td><td>`g1-humble-nav2card3` 曾上线并验收；command/status heartbeat、N5 proposal 与完整 runtime audit 通过</td><td><span class="status done">N1–N5 shadow 基线</span></td></tr>
-            <tr><td>Perception Bundle</td><td>`g1-general-navigation3` 已上线；Core 唯一注册 `general_navigation` processor / 14 actions；Nav2 bridge subscriber=1</td><td><span class="status done">N1 通过</span></td></tr>
+            <tr><td>Perception Bundle</td><td>Core 唯一注册 `navigation2` processor / 14 actions；Nav2 bridge subscriber=1</td><td><span class="status done">N1 通过</span></td></tr>
             <tr><td>N3 真机</td><td>真实建图与六文件原子保存、断电恢复、331 × 354 地图加载、AMCL globalize 和 origin tag shadow goal 均通过</td><td><span class="status done">N3 通过</span></td></tr>
             <tr><td>N5 shadow 链路</td><td>MCP 目标产生 sequence 12 / 250 ms 非零 proposal；显式停止后 sequence 13 以 `stopped` 零速收口，前后审计通过</td><td><span class="status done">ROS shadow 通过</span></td></tr>
             <tr><td>Driver actuator</td><td><code>loco.start</code> 绑定 expected_nav_id 与唯一 proposal topic；Driver 校验 schema、sequence、TTL、frame、速度和终态，并由 <code>loco.stop</code> 返回 stop_confirmed</td><td><span class="status done">Driver main 已交付</span></td></tr>
@@ -117,14 +117,14 @@
       </section>
 
       <section id="architecture">
-        <h2><span class="num">3</span>Driver + general_navigation 两卡架构</h2>
-        <p class="subtle">虚线框内属于 <code>general_navigation</code> Perception 卡片；左侧两个输出端口和下游可信执行端都由现有 Driver 卡负责。Agent Core 从画布三条精确连线发现执行关系，为一次导航任务分配 trusted nav_id，并以 Driver 的私有 start/info/stop 生命周期守住物理执行边界。</p>
+        <h2><span class="num">3</span>Driver + navigation2 两卡架构</h2>
+        <p class="subtle">虚线框内属于 <code>navigation2</code> Perception 卡片；左侧两个输出端口和下游可信执行端都由现有 Driver 卡负责。Agent Core 从画布三条精确连线发现执行关系，为一次导航任务分配 trusted nav_id，并以 Driver 的私有 start/info/stop 生命周期守住物理执行边界。</p>
         <div class="diagram" role="img" aria-label="G1 Nav2-only 通用导航卡片架构图">
           <svg viewBox="0 0 1240 760" xmlns="http://www.w3.org/2000/svg">
             <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#55717c"/></marker></defs>
             <rect class="box driver" x="30" y="42" width="220" height="70" rx="12"/><text class="title" x="140" y="70" text-anchor="middle">Driver · loco_state</text><text class="meta" x="140" y="92" text-anchor="middle">legacy JSON · adapter receive time</text>
             <rect class="box driver" x="30" y="158" width="220" height="70" rx="12"/><text class="title" x="140" y="186" text-anchor="middle">Driver · lidar_cloud</text><text class="meta" x="140" y="208" text-anchor="middle">&lt;II&gt; envelope · configured frame</text>
-            <rect class="group" x="285" y="24" width="925" height="610" rx="18"/><text class="title" x="310" y="55">general_navigation adapter + Nav2 companion · N1–N5 protocol</text>
+            <rect class="group" x="285" y="24" width="925" height="610" rx="18"/><text class="title" x="310" y="55">navigation2 adapter + Nav2 companion · N1–N5 protocol</text>
             <rect class="box nav2" x="320" y="82" width="205" height="72" rx="12"/><text class="title" x="423" y="110" text-anchor="middle">native odom bridge</text><text class="meta" x="423" y="132" text-anchor="middle">Odometry + odom→base_link</text>
             <rect class="box nav2" x="320" y="188" width="205" height="72" rx="12"/><text class="title" x="423" y="216" text-anchor="middle">cloud decoder + scan</text><text class="meta" x="423" y="238" text-anchor="middle">validate legacy → PointCloud2/LaserScan</text>
             <rect class="box algo" x="575" y="82" width="220" height="72" rx="12"/><text class="title" x="685" y="110" text-anchor="middle">mapping</text><text class="meta" x="685" y="132" text-anchor="middle">SLAM Toolbox · /map · map→odom</text>
@@ -202,7 +202,7 @@
       <section id="boundary">
         <h2><span class="num">7</span>Perception / Driver 与安全边界</h2>
         <div class="grid two">
-          <article class="card"><h3>Perception 拥有</h3><ul><li>`general_navigation` 工具与 `controlled_spatial` 规范实现</li><li>Nav2 容器、地图/定位、规划、任务状态与 shadow</li><li>N1–N6 门禁、诊断、故障结果和验收证据</li></ul></article>
+          <article class="card"><h3>Perception 拥有</h3><ul><li>`navigation2` 工具与 `controlled_spatial` 规范实现</li><li>Nav2 容器、地图/定位、规划、任务状态与 shadow</li><li>N1–N6 门禁、诊断、故障结果和验收证据</li></ul></article>
           <article class="card"><h3>G1 Driver 拥有</h3><ul><li>Unitree DDS 与 MID360 / 机身状态的标准 topic 适配</li><li>主运控、急停、姿态、租约、TTL 与有限时长高层运动</li><li>N5 后唯一物理 executor；不保存地图，只在有效租约内绑定 nav_id</li></ul></article>
         </div>
         <div class="callout danger"><strong>红线：</strong>Perception 不导入 Unitree SDK，不直接调 SmartMotion，不把 Nav2/EGO 直连物理速度话题。Driver 永不订阅 raw shadow；最终画布只允许精确 1 个预期的 `loco` subscriber 订阅 structured proposal，实验 executor 必须在产品验收前移除。</div>
@@ -240,7 +240,7 @@
           <div class="step"><span class="date">DONE</span><strong>Driver main 执行合同已交付</strong>：<code>loco</code> actuator 消费结构化 proposal，并实现 expected_nav_id、递增 sequence、250 ms TTL、限速、watchdog、急停和停车确认。</div>
           <div class="step"><span class="date">DONE</span><strong>联调候选已构建</strong>：Driver main、Agent Core、Nav2 card5 与 Perception gen5 均已得到 ARM64 镜像；Core / Perception / Nav2 容器 smoke 通过。</div>
           <div class="step"><span class="date">NEXT</span><strong>分阶段上机升级</strong>：机器人在线后按 Driver → Agent Core → Nav2 card5 → Perception gen5 顺序逐步 preflight/升级，每步都保留 rollback。</div>
-          <div class="step"><span class="date">NEXT</span><strong>两卡画布验收</strong>：连接 `loco_state → general_navigation.loco_state`、`lidar_cloud → general_navigation.lidar`、`general_navigation.velocity_proposal → loco.velocity_proposal`；从画布或统一 API 下发目标，验证实际到达、终态零速、pause 后 nav_id 退休以及项目 stop 停车。</div>
+          <div class="step"><span class="date">NEXT</span><strong>两卡画布验收</strong>：连接 `loco_state → navigation2.loco_state`、`lidar_cloud → navigation2.lidar`、`navigation2.velocity_proposal → loco.velocity_proposal`；从画布或统一 API 下发目标，验证实际到达、终态零速、pause 后 nav_id 退休以及项目 stop 停车。</div>
         </div>
         <pre><code>cd perception/plugins/general_navigation/nav2
 ./scripts/test.sh
@@ -253,7 +253,7 @@ I_AM_G1_OWNER=1 I_HAVE_G1_REMOTE=1 STAGE=move \
         <div class="callout"><strong>官方依据：</strong>Nav2 要求 Odometry 消息与 `odom→base_link` TF；可在 mapping 时运行 navigation stack + SLAM Toolbox，保存地图后使用 AMCL；DWB 支持 omnidirectional 运动模型。本方案没有自研替代这些成熟组件。</div>
       </section>
 
-      <footer>产品名：通用导航 · 工具标识：<code>general_navigation</code> · 规范：<code>controlled_spatial</code> · 首版：Nav2-only · 分支：<code>feat/general-navigation-perception</code></footer>
+      <footer>产品名：Navigation 2 · 工具标识：<code>navigation2</code> · 规范：<code>controlled_spatial</code> · 首版：Nav2-only · 分支：<code>feat/general-navigation-card</code></footer>
     </main>
   </div>
 </body>

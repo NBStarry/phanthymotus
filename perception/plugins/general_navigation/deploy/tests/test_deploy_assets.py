@@ -4,6 +4,7 @@ import unittest
 
 DEPLOY_DIR = pathlib.Path(__file__).resolve().parents[1]
 PERCEPTION_DIR = DEPLOY_DIR.parents[2]
+FORMAL_DEPLOY_DIR = PERCEPTION_DIR / "deploy"
 
 
 def read_env(path: pathlib.Path) -> dict[str, str]:
@@ -28,7 +29,7 @@ class NavigationPerceptionDeployAssetsTest(unittest.TestCase):
         config = (DEPLOY_DIR / "config.yaml").read_text()
 
         self.assertIn("ws_enabled: false\n", config)
-        self.assertIn("  general_navigation:\n", config)
+        self.assertIn("  navigation2:\n", config)
         self.assertNotIn("  asr:\n", config)
         self.assertNotIn("  tts:\n", config)
         self.assertIn("    enabled: true\n", config)
@@ -61,6 +62,24 @@ class NavigationPerceptionDeployAssetsTest(unittest.TestCase):
         self.assertIn("  read_only: true\n", service)
         self.assertIn("    - /home/unitree/phanthy-nav2/maps:/maps\n", service)
         self.assertIn("    - NAV2_MODE=mapping\n", service)
+
+    def test_formal_perception_compose_owns_nav2_companion(self):
+        service = (FORMAL_DEPLOY_DIR / "service.yml").read_text()
+
+        self.assertEqual(top_level_keys(service), ["perception", "nav2"])
+        self.assertIn("  depends_on:\n    - nav2\n", service)
+        self.assertIn("    - FASTDDS_BUILTIN_TRANSPORTS=UDPv4\n", service)
+        self.assertIn("  image: phanthy-nav2:g1-humble-nav2card5\n", service)
+        self.assertIn("  container_name: phanthy-nav2-shadow\n", service)
+        self.assertIn("    - /home/unitree/phanthy-nav2/maps:/maps\n", service)
+
+        config = (PERCEPTION_DIR / "config.yaml").read_text()
+        self.assertIn("  navigation2:\n", config)
+        self.assertIn("    enabled: true\n", config)
+        self.assertIn('    namespace: "ubuntu"\n', config)
+
+        jetson_dockerfile = (PERCEPTION_DIR / "Dockerfile.jetson").read_text()
+        self.assertIn("COPY perception/deploy/     /deploy/", jetson_dockerfile)
 
     def test_core_deploy_starts_declared_companions(self):
         source = (PERCEPTION_DIR.parent / "agent-core/src/api/drivers.py").read_text()
@@ -125,7 +144,7 @@ class NavigationPerceptionDeployAssetsTest(unittest.TestCase):
         probe = (DEPLOY_DIR / "tests" / "mcp_probe.py").read_text()
 
         self.assertIn(
-            'tool.get("name") == "general_navigation"', probe
+            'tool.get("name") == "navigation2"', probe
         )
         self.assertIn("assert len(matches) == 1", probe)
         self.assertNotIn("assert len(tools) == 1", probe)
@@ -244,7 +263,8 @@ class NavigationPerceptionDeployAssetsTest(unittest.TestCase):
         self.assertIn("project remains stopped", owner)
         self.assertIn("loco_state", wire)
         self.assertIn("lidar_cloud", wire)
-        self.assertIn("general_navigation", wire)
+        self.assertIn('NAVIGATION_TOOL = "navigation2"', wire)
+        self.assertIn('LEGACY_NAVIGATION_TOOL = "general_navigation"', wire)
         self.assertIn("velocity_proposal", wire)
         self.assertIn("goal_pose", wire)
         self.assertIn("phanthy.navigation.goal.v1", wire)

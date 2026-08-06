@@ -3,7 +3,7 @@ import unittest
 from plugins.general_navigation.contract import (
     GENERAL_NAVIGATION_ACTION_PARAMS,
     GENERAL_NAVIGATION_ACTIONS,
-    general_navigation_tool_definition,
+    navigation2_tool_definition,
 )
 
 
@@ -26,17 +26,16 @@ EXPECTED_ACTION_PARAMS = {
 
 
 class GeneralNavigationContractTest(unittest.TestCase):
-    def test_card_uses_general_navigation_name_and_processor_type(self):
-        tool = general_navigation_tool_definition("ubuntu")
+    def test_card_uses_navigation2_name_and_processor_type(self):
+        tool = navigation2_tool_definition("ubuntu")
 
-        self.assertEqual(tool["name"], "navigation")
+        self.assertEqual(tool["name"], "navigation2")
         self.assertEqual(tool["displayName"], "Navigation 2")
         self.assertEqual(tool["type"], "processor")
         self.assertFalse(tool["multiInstance"])
-        self.assertEqual(f"general_{tool['name']}", "general_navigation")
 
     def test_contract_preserves_exactly_the_14_frozen_actions(self):
-        tool = general_navigation_tool_definition("ubuntu")
+        tool = navigation2_tool_definition("ubuntu")
         schema = tool["inputSchema"]
 
         self.assertEqual(len(GENERAL_NAVIGATION_ACTIONS), 14)
@@ -60,7 +59,7 @@ class GeneralNavigationContractTest(unittest.TestCase):
         )
 
     def test_topics_are_driver_inputs_and_loco_proposal_output(self):
-        tool = general_navigation_tool_definition("ubuntu")
+        tool = navigation2_tool_definition("ubuntu")
 
         self.assertEqual(
             [entry["topic"] for entry in tool["topic_in"]],
@@ -149,8 +148,8 @@ class GeneralNavigationContractTest(unittest.TestCase):
         )
 
     def test_each_call_returns_an_independent_contract(self):
-        first = general_navigation_tool_definition("ubuntu")
-        second = general_navigation_tool_definition("ubuntu")
+        first = navigation2_tool_definition("ubuntu")
+        second = navigation2_tool_definition("ubuntu")
         first["inputSchema"]["properties"]["action"]["enum"].append("unsafe")
 
         self.assertNotEqual(first, second)

@@ -1,8 +1,9 @@
 # Navigation 2 Perception 卡片
 
 Canvas 展示名为 **Navigation 2**。它是 Perception Bundle 中的单实例
-`processor` 卡片；稳定工具标识仍为 `general_navigation`，用于保存画布、MCP 调用
-和可信导航租约，改展示名不会破坏已有连线。`controlled_spatial` 是 14-action
+`processor` 卡片；稳定工具标识为 `navigation2`，用于保存画布、MCP 调用
+和可信导航租约。Draft 期间的 `general_navigation` 卡片会在下次 owner wire 时
+原地迁移为 `navigation2`。`controlled_spatial` 是 14-action
 业务规范，不是卡片名。
 
 设计见 [通用导航整体方案](通用导航整体方案.html)，Nav2 运行资产见
@@ -16,12 +17,12 @@ Canvas 展示名为 **Navigation 2**。它是 Perception Bundle 中的单实例
 
 ```text
 Driver.loco_state ──┐
-                     ├──> general_navigation ── velocity_proposal.v1 ──> Driver.loco ──> G1
+                     ├──> navigation2 ── velocity_proposal.v1 ──> Driver.loco ──> G1
 Driver.lidar_cloud ─┘
 goal_pose.v1 (可选) ──────────────────┘
 ```
 
-`general_navigation` 只产生结构化速度提案，不导入 Unitree SDK，不直接执行运动。
+`navigation2` 只产生结构化速度提案，不导入 Unitree SDK，不直接执行运动。
 Agent Core 是可信控制面：每个导航任务开始前生成 `nav_id`，先把该 ID
 绑定到画布上精确连接的 `loco` Driver，再下发目标。到达、停止、暂停或错误
 后必须先获得 Driver 停车确认，才释放租约。
@@ -219,15 +220,16 @@ I_AM_G1_OWNER=1 I_HAVE_G1_REMOTE=1 \
 
 ## 命名约束
 
-Perception Bundle 会按工具名第一个 `_` 拆 PREFIX，因此实现保持：
+Perception Bundle 会按工具名第一个 `_` 拆 PREFIX。`navigation2` 不含下划线，
+因此工具名和插件 PREFIX 可以使用同一稳定 ID：
 
 ```python
 class GeneralNavigationPlugin:
-    PREFIX = "general"
+    PREFIX = "navigation2"
 
     def get_tools(self):
-        return [{"name": "navigation", "type": "processor", ...}]
+        return [{"name": "navigation2", "type": "processor", ...}]
 ```
 
-Bundle 对外组合为 `general_navigation`。框架内部 `info/config/start/stop` 不计入 14 个
+Bundle 对外仍为 `navigation2`。框架内部 `info/config/start/stop` 不计入 14 个
 业务 action。

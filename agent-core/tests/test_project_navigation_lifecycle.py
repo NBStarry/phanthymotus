@@ -81,7 +81,7 @@ def fixture(*, with_execution_wire=True):
         {
             "id": "nav-card",
             "mcpId": "perception",
-            "toolName": "general_navigation",
+            "toolName": "navigation2",
             "topicOut": [proposal],
         },
         {
@@ -130,7 +130,7 @@ def fixture(*, with_execution_wire=True):
             "id": "perception",
             "tools": [
                 {
-                    "name": "general_navigation",
+                    "name": "navigation2",
                     "type": "processor",
                     "topic_out": [proposal],
                     "x-execution-control": CONTROL,

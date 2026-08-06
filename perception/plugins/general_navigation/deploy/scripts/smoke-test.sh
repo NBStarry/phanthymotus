@@ -56,7 +56,7 @@ fi
 logs="$(docker logs "${container_name}" 2>&1)"
 if [[ "${logs}" != *"GeneralNavigationPlugin loaded (namespace=ubuntu)"* ]]; then
   printf '%s\n' "${logs}" >&2
-  echo "ERROR=general_navigation plugin did not load" >&2
+  echo "ERROR=navigation2 plugin did not load" >&2
   exit 1
 fi
 if [[ "${logs}" != *"WebSocket ASR server disabled by config"* ]]; then

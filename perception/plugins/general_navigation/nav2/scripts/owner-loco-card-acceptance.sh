@@ -87,4 +87,4 @@ G1_HOST="${g1_host}" \
 LOCO_PROPOSAL_NODE="${loco_proposal_node}" \
   "${script_dir}/loco-integration-readiness.sh"
 echo "GENERAL_NAVIGATION_LOCO_CARD_ACCEPTANCE=PASS"
-echo "NOTE=the goal was issued through Agent Core -> general_navigation -> Driver loco; measured motion, arrival, Driver stop confirmation, and terminal zero proposal all passed"
+echo "NOTE=the goal was issued through Agent Core -> navigation2 -> Driver loco; measured motion, arrival, Driver stop confirmation, and terminal zero proposal all passed"

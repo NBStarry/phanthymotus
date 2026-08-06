@@ -76,7 +76,7 @@ class GeneralNavigationPluginTest(unittest.TestCase):
             {}, "ubuntu", None, backend=self.backend
         )
         started = self.plugin.dispatch(
-            "navigation",
+            "navigation2",
             {
                 "action": "start",
                 "instance_id": "card-general-navigation",
@@ -88,19 +88,16 @@ class GeneralNavigationPluginTest(unittest.TestCase):
         )
         self.assertEqual(started["state"], "ready")
 
-    def test_prefix_and_tool_name_route_to_general_navigation(self):
+    def test_prefix_and_tool_name_route_to_navigation2(self):
         tool = self.plugin.get_tools()[0]
 
-        self.assertEqual(self.plugin.PREFIX, "general")
-        self.assertEqual(tool["name"], "navigation")
-        self.assertEqual(
-            f"{self.plugin.PREFIX}_{tool['name']}", "general_navigation"
-        )
+        self.assertEqual(self.plugin.PREFIX, "navigation2")
+        self.assertEqual(tool["name"], "navigation2")
         self.assertIsNone(self.plugin.dispatch("other", {"action": "list_maps"}))
 
     def test_hidden_info_does_not_change_the_14_action_schema(self):
         tool = self.plugin.get_tools()[0]
-        result = self.plugin.dispatch("navigation", {"action": "info"})
+        result = self.plugin.dispatch("navigation2", {"action": "info"})
 
         self.assertEqual(result["backend"], "fake")
         self.assertEqual(result["type"], "processor")
@@ -118,7 +115,7 @@ class GeneralNavigationPluginTest(unittest.TestCase):
 
     def test_trusted_agent_core_nav_id_is_used_without_exposing_public_parameter(self):
         started = self.plugin.dispatch(
-            "navigation",
+            "navigation2",
             {
                 "action": "navigate_to_pose",
                 "x": 1,
@@ -133,7 +130,7 @@ class GeneralNavigationPluginTest(unittest.TestCase):
 
     def test_navigation_is_nonblocking_and_wait_uses_same_nav_id(self):
         started = self.plugin.dispatch(
-            "navigation",
+            "navigation2",
             {
                 "action": "navigate_to_pose",
                 "x": 1,
@@ -143,7 +140,7 @@ class GeneralNavigationPluginTest(unittest.TestCase):
             },
         )
         waiting = self.plugin.dispatch(
-            "navigation", {"action": "wait_navigation_done"}
+            "navigation2", {"action": "wait_navigation_done"}
         )
 
         self.assertEqual(started["status"], "navigating")
@@ -164,8 +161,8 @@ class GeneralNavigationPluginTest(unittest.TestCase):
             "yaw": 0,
             "mode": 0,
         }
-        first = self.plugin.dispatch("navigation", args)
-        second = self.plugin.dispatch("navigation", args)
+        first = self.plugin.dispatch("navigation2", args)
+        second = self.plugin.dispatch("navigation2", args)
 
         self.assertEqual(first["status"], "navigating")
         self.assertEqual(second["status"], "error")
@@ -211,21 +208,21 @@ class GeneralNavigationPluginTest(unittest.TestCase):
 
         for args, code in cases:
             with self.subTest(args=args):
-                result = self.plugin.dispatch("navigation", args)
+                result = self.plugin.dispatch("navigation2", args)
                 self.assertEqual(result["status"], "error")
                 self.assertEqual(result["error_code"], code)
         self.assertEqual(self.backend.calls, [])
 
     def test_unimplemented_n3_action_reports_explicit_gate(self):
         result = self.plugin.dispatch(
-            "navigation", {"action": "start_mapping", "map_name": "office"}
+            "navigation2", {"action": "start_mapping", "map_name": "office"}
         )
 
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["error_code"], "n3_not_ready")
 
     def test_stop_is_idempotent_when_idle(self):
-        result = self.plugin.dispatch("navigation", {"action": "stop_nav"})
+        result = self.plugin.dispatch("navigation2", {"action": "stop_nav"})
 
         self.assertEqual(result["status"], "stopped")
         self.assertTrue(result["already_idle"])
@@ -236,7 +233,7 @@ class GeneralNavigationPluginTest(unittest.TestCase):
             {"backend": "disabled"}, "ubuntu", None
         )
         started = plugin.dispatch(
-            "navigation",
+            "navigation2",
             {
                 "action": "start",
                 "input_topics": [
@@ -246,8 +243,8 @@ class GeneralNavigationPluginTest(unittest.TestCase):
             },
         )
 
-        info = plugin.dispatch("navigation", {"action": "info"})
-        result = plugin.dispatch("navigation", {"action": "list_maps"})
+        info = plugin.dispatch("navigation2", {"action": "info"})
+        result = plugin.dispatch("navigation2", {"action": "list_maps"})
         self.assertEqual(started["state"], "error")
         self.assertEqual(started["error_code"], "backend_not_ready")
         self.assertEqual(info["state"], "unavailable")
@@ -260,7 +257,7 @@ class GeneralNavigationPluginTest(unittest.TestCase):
         )
 
         unwired = plugin.dispatch(
-            "navigation",
+            "navigation2",
             {
                 "action": "navigate_to_pose",
                 "x": 1,
@@ -269,11 +266,11 @@ class GeneralNavigationPluginTest(unittest.TestCase):
             },
         )
         missing = plugin.dispatch(
-            "navigation",
+            "navigation2",
             {"action": "start", "input_topic": "/ubuntu/loco/state"},
         )
         ready = plugin.dispatch(
-            "navigation",
+            "navigation2",
             {
                 "action": "start",
                 "instance_id": "card-nav",
@@ -283,7 +280,7 @@ class GeneralNavigationPluginTest(unittest.TestCase):
                 ],
             },
         )
-        stopped = plugin.dispatch("navigation", {"action": "stop"})
+        stopped = plugin.dispatch("navigation2", {"action": "stop"})
 
         self.assertEqual(unwired["error_code"], "canvas_not_started")
         self.assertEqual(missing["error_code"], "invalid_canvas_wiring")
@@ -299,10 +296,10 @@ class GeneralNavigationPluginTest(unittest.TestCase):
         }
         no_bridge = GeneralNavigationPlugin(
             {}, "ubuntu", None, backend=FakeNav2Backend(subscribers=0)
-        ).dispatch("navigation", inputs)
+        ).dispatch("navigation2", inputs)
         stale = GeneralNavigationPlugin(
             {}, "ubuntu", None, backend=FakeNav2Backend(n3_ready=False)
-        ).dispatch("navigation", inputs)
+        ).dispatch("navigation2", inputs)
 
         self.assertEqual(no_bridge["error_code"], "nav2_companion_unavailable")
         self.assertEqual(stale["error_code"], "navigation_not_ready")
@@ -313,7 +310,7 @@ class GeneralNavigationPluginTest(unittest.TestCase):
             {}, "ubuntu", None, backend=FakeBackend()
         )
         result = plugin.dispatch(
-            "navigation",
+            "navigation2",
             {
                 "action": "start",
                 "input_bindings": [
@@ -335,7 +332,7 @@ class GeneralNavigationPluginTest(unittest.TestCase):
             {}, "ubuntu", None, backend=FakeBackend()
         )
         result = plugin.dispatch(
-            "navigation",
+            "navigation2",
             {
                 "action": "start",
                 "input_bindings": [

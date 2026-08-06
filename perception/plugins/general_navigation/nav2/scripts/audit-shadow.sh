@@ -241,7 +241,7 @@ runtime_audit='
     --qos-reliability reliable --qos-durability transient_local --field data \
     /ubuntu/navigation/nav2/status 2>&1)"; then
     printf "%s\n" "${navigation_status}"
-    echo "ERROR=no general_navigation status heartbeat" >&2
+    echo "ERROR=no navigation2 status heartbeat" >&2
     exit 1
   fi
   echo "G1_NAV2_CARD_STATUS_BEGIN"
@@ -249,7 +249,7 @@ runtime_audit='
   echo "G1_NAV2_CARD_STATUS_END"
   if ! grep -Fq "\"shadow_only\":true" <<<"${navigation_status}" || \
      ! grep -Fq "\"physical_execution\":false" <<<"${navigation_status}"; then
-    echo "ERROR=general_navigation status is not shadow-only" >&2
+    echo "ERROR=navigation2 status is not shadow-only" >&2
     exit 1
   fi
 

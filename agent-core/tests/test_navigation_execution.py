@@ -39,7 +39,7 @@ def fixture(*, with_connection=True):
             {
                 "id": "nav-card",
                 "mcpId": "perception",
-                "toolName": "general_navigation",
+                "toolName": "navigation2",
                 "topicOut": [proposal_port],
             },
             {
@@ -67,7 +67,7 @@ def fixture(*, with_connection=True):
             "id": "perception",
             "tools": [
                 {
-                    "name": "general_navigation",
+                    "name": "navigation2",
                     "type": "processor",
                     "x-execution-control": CONTROL,
                     "topic_out": [proposal_port],
@@ -96,7 +96,7 @@ class NavigationExecutionResolverTest(unittest.TestCase):
             layout=layout,
             mcp_entries=mcps,
             source_mcp_id="perception",
-            source_tool="general_navigation",
+            source_tool="navigation2",
             control=CONTROL,
         )
 
@@ -112,7 +112,7 @@ class NavigationExecutionResolverTest(unittest.TestCase):
                 layout=layout,
                 mcp_entries=mcps,
                 source_mcp_id="perception",
-                source_tool="general_navigation",
+                source_tool="navigation2",
                 control=CONTROL,
             )
 
@@ -170,7 +170,7 @@ class NavigationExecutionLifecycleTest(unittest.IsolatedAsyncioTestCase):
         ):
             return await execution.call_with_execution_lease(
                 source_mcp_id="perception",
-                source_tool="general_navigation",
+                source_tool="navigation2",
                 action=action,
                 arguments={"action": action, **arguments},
                 control=CONTROL,

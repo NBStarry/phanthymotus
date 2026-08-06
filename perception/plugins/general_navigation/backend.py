@@ -61,7 +61,7 @@ class RosTopicNavigationBackend:
             raise ValueError("navigation bridge timeouts must be positive")
 
         node_suffix = re.sub(r"[^a-zA-Z0-9_]", "_", namespace or "root")
-        self._node = Node(f"general_navigation_{node_suffix}")
+        self._node = Node(f"navigation2_{node_suffix}")
         command_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=10,

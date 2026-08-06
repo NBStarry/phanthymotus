@@ -51,7 +51,7 @@ def fixture(*, connected=True, source_schema=GOAL_SCHEMA):
             {
                 "id": "nav-card",
                 "mcpId": "perception",
-                "toolName": "general_navigation",
+                "toolName": "navigation2",
                 "topicIn": [goal_input],
             },
         ],
@@ -83,7 +83,7 @@ def fixture(*, connected=True, source_schema=GOAL_SCHEMA):
             "id": "perception",
             "tools": [
                 {
-                    "name": "general_navigation",
+                    "name": "navigation2",
                     "type": "processor",
                     "topic_in": [goal_input],
                     "x-topic-actions": [declaration],

@@ -174,11 +174,11 @@ def framework_navigation_mcp_id() -> str:
     matches = []
     for entry in registry.get("data", []):
         tools = entry.get("tools") or []
-        if any(tool.get("name") == "general_navigation" for tool in tools):
+        if any(tool.get("name") == "navigation2" for tool in tools):
             matches.append(entry)
     if len(matches) != 1:
         raise RuntimeError(
-            f"expected one framework general_navigation MCP, got {len(matches)}"
+            f"expected one framework navigation2 MCP, got {len(matches)}"
         )
     return str(matches[0].get("id", ""))
 
@@ -202,7 +202,7 @@ def require_framework_canvas() -> None:
 
     state = one("loco_state")
     lidar = one("lidar_cloud")
-    navigation = one("general_navigation")
+    navigation = one("navigation2")
     loco = one("loco")
 
     def connected(source: dict, target: dict, topic: str) -> bool:
@@ -220,7 +220,7 @@ def require_framework_canvas() -> None:
     )
     if not all(required):
         raise RuntimeError(
-            "canvas must wire loco_state + lidar_cloud -> general_navigation -> loco"
+            "canvas must wire loco_state + lidar_cloud -> navigation2 -> loco"
         )
 
 
@@ -228,7 +228,7 @@ def call_navigation(arguments: dict, request_id: int) -> dict:
     if COMMAND_BACKEND == "agent_core":
         result = core_request(
             f"mcp/{framework_navigation_mcp_id()}/call",
-            body={"tool": "general_navigation", "arguments": arguments},
+            body={"tool": "navigation2", "arguments": arguments},
         )
         if result.get("code") != 200:
             raise RuntimeError(f"Agent Core tool call failed: {result!r}")
@@ -245,7 +245,7 @@ def call_navigation(arguments: dict, request_id: int) -> dict:
         )
     result = rpc(
         "tools/call",
-        {"name": "general_navigation", "arguments": arguments},
+        {"name": "navigation2", "arguments": arguments},
         request_id,
     )
     content = result.get("content", [])

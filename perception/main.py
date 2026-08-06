@@ -108,9 +108,9 @@ class PerceptionBundle:
             self._plugins.append(plugin)
             log.info("VideoObjectPerceptionPlugin loaded (namespace=%s)", namespace)
 
-        if plugins_cfg.get("general_navigation", {}).get("enabled", False):
+        if plugins_cfg.get("navigation2", {}).get("enabled", False):
             import re, socket
-            navigation_cfg = plugins_cfg["general_navigation"]
+            navigation_cfg = plugins_cfg["navigation2"]
             namespace = navigation_cfg.get("namespace", "").strip()
             if not namespace:
                 namespace = re.sub(r"[^a-zA-Z0-9_]", "_", socket.gethostname())

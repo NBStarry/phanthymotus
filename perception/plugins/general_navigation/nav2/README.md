@@ -1,6 +1,6 @@
 # G1 Nav2-only MVP
 
-本目录是 `general_navigation` 的 ROS 2 Humble companion。首版使用 SLAM Toolbox +
+本目录是 `navigation2` 的 ROS 2 Humble companion。首版使用 SLAM Toolbox +
 AMCL + NavFn + DWB，不依赖 FAST-LIVO2 或 EGO-Planner；物理执行仍归 Driver。
 
 ## 运行链路
@@ -115,7 +115,7 @@ I_AM_G1_OWNER=1 I_HAVE_G1_REMOTE=1 \
 ```
 
 `owner-loco-card-acceptance.sh` 在 Nav2 容器中观测 costmap/TF/proposal，但所有
-`general_navigation` 调用都通过 Agent Core HTTPS API，因此会真正验证画布三条
+`navigation2` 调用都通过 Agent Core HTTPS API，因此会真正验证画布三条
 连线、可信 `nav_id` 绑定、Driver 执行与停车释放。
 
 项目启动后的 `loco` 卡片处于可信 standby：Driver 已注册且保持
@@ -125,7 +125,8 @@ I_AM_G1_OWNER=1 I_HAVE_G1_REMOTE=1 \
 
 ## 操作边界
 
-- 不加 crontab，compose 保持 `restart: "no"`；
+- 不加 crontab；正式 Perception Compose 通过 `depends_on` 统一拉起
+  `nav2` 与 `perception`，两者使用 `restart: unless-stopped`；
 - 部署、容器切换、建图和运动都由机器人 owner 手动执行；
 - FastDDS 固定 `ROS_DOMAIN_ID=42` + `FASTDDS_BUILTIN_TRANSPORTS=UDPv4`；
 - 输入、外参、地图/TF、画布连线或 Driver 停车确认任一缺失都 fail closed；

@@ -6,7 +6,7 @@ import logging
 import threading
 
 from .backend import RosTopicNavigationBackend
-from .contract import general_navigation_tool_definition
+from .contract import navigation2_tool_definition
 from .core import GeneralNavigationCore, UnavailableNavigationBackend
 
 
@@ -14,9 +14,9 @@ log = logging.getLogger(__name__)
 
 
 class GeneralNavigationPlugin:
-    """Expose the frozen 14-action navigation contract as `general_navigation`."""
+    """Expose the frozen 14-action navigation contract as `navigation2`."""
 
-    PREFIX = "general"
+    PREFIX = "navigation2"
 
     def __init__(
         self,
@@ -37,10 +37,10 @@ class GeneralNavigationPlugin:
         self._wired_topics: dict[str, str] = {}
 
     def get_tools(self) -> list:
-        return [general_navigation_tool_definition(self._namespace)]
+        return [navigation2_tool_definition(self._namespace)]
 
     def dispatch(self, name: str, args: dict) -> dict | None:
-        if name != "navigation":
+        if name != "navigation2":
             return None
         if not isinstance(args, dict):
             return self._error("invalid_argument", "arguments must be an object")
@@ -254,7 +254,7 @@ class GeneralNavigationPlugin:
         try:
             return RosTopicNavigationBackend(cfg, self._namespace, executor)
         except Exception as exc:
-            log.error("[general_navigation] backend unavailable: %s", exc, exc_info=True)
+            log.error("[navigation2] backend unavailable: %s", exc, exc_info=True)
             return UnavailableNavigationBackend(
                 f"Nav2 ROS topic backend unavailable: {type(exc).__name__}: {exc}"
             )
