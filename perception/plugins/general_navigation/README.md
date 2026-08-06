@@ -40,6 +40,21 @@ Canvas 项目的启动/停止只负责插件状态、导航任务和 Driver 租�
 销毁基础容器。这样避免卡片获得宿主容器控制权，也避免停止 Canvas 时误杀地图与
 定位运行时。
 
+上海 G1 的 owner 部署入口为：
+
+```bash
+bash perception/plugins/general_navigation/deploy/scripts/build.sh
+
+PREFLIGHT_ONLY=1 G1_HOST=g1-sh-wifi \
+  bash perception/plugins/general_navigation/deploy/scripts/owner-upgrade-g1.sh
+
+I_AM_G1_OWNER=1 G1_HOST=g1-sh-wifi \
+  bash perception/plugins/general_navigation/deploy/scripts/owner-upgrade-g1.sh
+```
+
+脚本在写入前要求 Canvas 已停止，并同时保留旧的 Perception 和 Nav2 容器
+作为 rollback；不会替换 Driver 或 Agent Core。
+
 ## Driver 输入合同
 
 当前 [Driver main](https://github.com/He2y/phanthymotus-driver/tree/main) 已发布的传感器

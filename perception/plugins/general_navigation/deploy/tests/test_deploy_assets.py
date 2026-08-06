@@ -113,25 +113,7 @@ class NavigationPerceptionDeployAssetsTest(unittest.TestCase):
     def test_owner_deploy_is_guarded_audited_and_rollback_capable(self):
         owner = (DEPLOY_DIR / "scripts" / "owner-deploy-g1.sh").read_text()
 
-        gate = owner.index('I_AM_G1_OWNER:-0')
-        local_image_read = owner.index('docker image inspect "${GENERAL_NAVIGATION_IMAGE}"')
-        remote_image_write = owner.index('docker save "${GENERAL_NAVIGATION_IMAGE}"')
-        preflight_exit = owner.index('GENERAL_NAVIGATION_G1_PREFLIGHT=PASS')
-        self.assertLess(gate, local_image_read)
-        self.assertLess(preflight_exit, remote_image_write)
-        self.assertIn('G1_HOST="${g1_host}" "${nav2_scripts}/audit-shadow.sh"', owner)
-        self.assertIn('cp -p "${compose_file}" "${backup_file}"', owner)
-        self.assertIn(
-            "docker exec ${core_container} cp -p ${backup_file} ${compose_file}",
-            owner,
-        )
-        self.assertIn("os.chown(t,st.st_uid,st.st_gid)", owner)
-        self.assertIn("s['perception']['read_only']=False", owner)
-        self.assertIn("compose ownership changed", owner)
-        self.assertIn("deployment failed; restoring compose backup", owner)
-        self.assertIn("MCP_STARTUP_TIMEOUT=30", owner)
-        self.assertIn("EXPECT_BRIDGE_SUBSCRIBER=1", owner)
-        self.assertIn("core_registry_probe.py", owner)
+        self.assertIn('exec "${script_dir}/owner-upgrade-g1.sh" "$@"', owner)
 
     def test_mcp_probe_has_bounded_startup_retry(self):
         probe = (DEPLOY_DIR / "tests" / "mcp_probe.py").read_text()
@@ -176,7 +158,7 @@ class NavigationPerceptionDeployAssetsTest(unittest.TestCase):
         source_lock = read_env(DEPLOY_DIR / "source-lock.env")
 
         gate = owner.index("I_AM_G1_OWNER:-0")
-        preflight = owner.index("GENERAL_NAVIGATION_G1_UPGRADE_PREFLIGHT=PASS")
+        preflight = owner.index("NAVIGATION2_G1_DEPLOY_PREFLIGHT=PASS")
         image_write = owner.index('docker save "${GENERAL_NAVIGATION_IMAGE}"')
         self.assertLess(gate, preflight)
         self.assertLess(preflight, image_write)
@@ -184,30 +166,43 @@ class NavigationPerceptionDeployAssetsTest(unittest.TestCase):
             source_lock["GENERAL_NAVIGATION_IMAGE"],
             "phanthy-perception:g1-general-navigation5",
         )
-        self.assertIn("before-general-navigation5", owner)
+        self.assertEqual(
+            source_lock["GENERAL_NAVIGATION_NAV2_IMAGE"],
+            "phanthy-nav2:g1-humble-nav2card5",
+        )
+        self.assertIn("before-navigation2", owner)
         self.assertIn("phanthy-perception:g1-general-navigation4", owner)
         self.assertIn("owner must start Agent Core and rerun preflight", owner)
+        self.assertIn("project_stopped_probe.py", owner)
         self.assertNotIn("docker start ${core_container}", owner)
         self.assertIn("os.chown(t,st.st_uid,st.st_gid)", owner)
         self.assertIn("s['perception']['read_only']=False", owner)
         self.assertIn('"${current_read_only}" == "false"', owner)
+        self.assertIn("set(s)=={'perception','nav2'}", owner)
+        self.assertIn("up --detach perception", owner)
+        self.assertNotIn("up --detach --no-deps perception", owner)
         self.assertIn("compose ownership changed", owner)
-        self.assertIn("upgrade failed; restoring compose backup", owner)
-        self.assertIn('compose_service_state="orphan"', owner)
-        self.assertIn("refusing unknown orphan Perception container", owner)
-        self.assertIn("com.docker.compose.project.config_files", owner)
+        self.assertIn("deployment failed; restoring Compose", owner)
+        self.assertIn("refusing unknown orphan containers", owner)
         self.assertIn('candidate_fragment="/opt/phanthy-motus/', owner)
         self.assertIn("docker rename", owner)
-        self.assertIn('"${perception_container}" "${rollback_container}"', owner)
-        self.assertIn("GENERAL_NAVIGATION_ROLLBACK_CONTAINER", owner)
+        self.assertIn('"${perception_container}" "${perception_rollback}"', owner)
+        self.assertIn('"${nav2_container}" "${nav2_rollback}"', owner)
+        self.assertIn("perception_renamed=1", owner)
+        self.assertIn("nav2_renamed=1", owner)
+        self.assertIn('"${perception_renamed}" == "1"', owner)
+        self.assertIn('"${nav2_renamed}" == "1"', owner)
+        self.assertIn("NAVIGATION2_PERCEPTION_ROLLBACK", owner)
+        self.assertIn("NAVIGATION2_NAV2_ROLLBACK", owner)
+        self.assertIn('"${runtime_restart}" != "unless-stopped"', owner)
+        self.assertIn('"${nav2_runtime_restart}" != "unless-stopped"', owner)
         self.assertIn("MCP_STARTUP_TIMEOUT=30", owner)
         self.assertIn("EXPECT_BRIDGE_SUBSCRIBER=1", owner)
         self.assertIn("core_registry_probe.py", owner)
         self.assertIn("audit-shadow.sh", owner)
         self.assertIn("REQUIRE_N5_PROTOCOL=1", owner)
         self.assertIn("no Driver command was issued", owner)
-        self.assertIn("released legacy Driver input adapter", owner)
-        self.assertNotIn("timestamped Driver input contract", owner)
+        self.assertIn("formal Perception Compose project", owner)
 
     def test_driver_main_upgrade_restores_the_released_actuator_fail_closed(self):
         owner = (
