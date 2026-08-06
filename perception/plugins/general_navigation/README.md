@@ -1,7 +1,9 @@
-# 通用导航 Perception 卡片
+# Navigation 2 Perception 卡片
 
-“通用导航”是 Perception Bundle 中的单实例 `processor` 卡片，工具名为
-`general_navigation`。`controlled_spatial` 是 14-action 业务规范，不是卡片名。
+Canvas 展示名为 **Navigation 2**。它是 Perception Bundle 中的单实例
+`processor` 卡片；稳定工具标识仍为 `general_navigation`，用于保存画布、MCP 调用
+和可信导航租约，改展示名不会破坏已有连线。`controlled_spatial` 是 14-action
+业务规范，不是卡片名。
 
 设计见 [通用导航整体方案](通用导航整体方案.html)，Nav2 运行资产见
 [Nav2-only MVP](nav2/README.md)，执行边界见
@@ -23,6 +25,19 @@ goal_pose.v1 (可选) ──────────────────┘
 Agent Core 是可信控制面：每个导航任务开始前生成 `nav_id`，先把该 ID
 绑定到画布上精确连接的 `loco` Driver，再下发目标。到达、停止、暂停或错误
 后必须先获得 Driver 停车确认，才释放租约。
+
+## 容器生命周期
+
+Navigation 2 需要一个独立 Nav2 companion，但卡片进程不调用 Docker，也不挂载
+宿主 Docker socket。Perception 镜像内的 `/deploy/service.yml` 同时声明
+`perception` 与 `nav2` 两个 Compose service，且 `perception depends_on nav2`。
+Agent Core 部署 Perception 时执行普通 `docker compose up perception`，Compose 会先
+拉起 `phanthy-nav2-shadow`，再拉起 `embodied-perception`；两个服务都使用
+`unless-stopped`，因此机器人重启时也遵循同一持久生命周期。
+
+Canvas 项目的启动/停止只负责插件状态、导航任务和 Driver 租约，不负责创建或
+销毁基础容器。这样避免卡片获得宿主容器控制权，也避免停止 Canvas 时误杀地图与
+定位运行时。
 
 ## Driver 输入合同
 

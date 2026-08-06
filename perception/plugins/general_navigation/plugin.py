@@ -268,7 +268,7 @@ class GeneralNavigationPlugin:
             wired_topics = dict(self._wired_topics)
         result.update(
             {
-                "name": "GeneralNavigation",
+                "name": "Navigation 2",
                 "type": "processor",
                 "canvas_wired": canvas_started,
                 "instance_id": instance_id or None,

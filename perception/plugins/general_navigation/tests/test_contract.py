@@ -30,6 +30,7 @@ class GeneralNavigationContractTest(unittest.TestCase):
         tool = general_navigation_tool_definition("ubuntu")
 
         self.assertEqual(tool["name"], "navigation")
+        self.assertEqual(tool["displayName"], "Navigation 2")
         self.assertEqual(tool["type"], "processor")
         self.assertFalse(tool["multiInstance"])
         self.assertEqual(f"general_{tool['name']}", "general_navigation")

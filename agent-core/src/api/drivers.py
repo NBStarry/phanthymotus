@@ -156,6 +156,8 @@ def _deploy_sync(driver: dict) -> dict:
         return _deploy_sync_legacy(driver)
 
     service_name = list(service_def.keys())[0]
+    if not all(isinstance(value, dict) for value in service_def.values()):
+        return {'status': 'error', 'error': 'invalid compose service fragment'}
     service_def[service_name]['image'] = target_image
 
     # Read existing compose (or create minimal)
@@ -185,10 +187,13 @@ def _deploy_sync(driver: dict) -> dict:
         except docker_sdk.errors.NotFound:
             pass
 
-    # docker compose up
+    # Start the primary service together with any declared companion services.
+    # The stable service name remains the card routing identity; Compose owns
+    # the container lifecycle and resolves depends_on without giving the card
+    # process access to the host Docker socket.
     _log_deploy(driver['id'], f'[compose] up -d {service_name}')
     result = subprocess.run(
-        ['docker', 'compose', '-f', compose_file, 'up', '-d', '--no-deps', '--force-recreate', service_name],
+        ['docker', 'compose', '-f', compose_file, 'up', '-d', '--force-recreate', service_name],
         capture_output=True, text=True,
     )
     if result.stdout:
@@ -531,4 +536,3 @@ async def driver_remove(driver_id: str):
 async def driver_status(driver_id: str):
     status = await _run_in_executor(_get_status_sync, driver_id)
     return {'code': 200, 'data': status}
-

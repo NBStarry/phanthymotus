@@ -635,6 +635,7 @@ function _buildCardEl({ id, mcpId, toolName, driverName, x, y, topicIn: savedTop
   const mcp     = _allMcps.find(m => m.id === mcpId);
   const tools   = mcp?.tools || [];
   const toolObj = tools.find(t => (typeof t === 'string' ? t : t.name) === toolName);
+  const toolDisplayName = typeof toolObj === 'object' ? (toolObj.displayName || toolName) : toolName;
   const schema  = typeof toolObj === 'object' ? toolObj.inputSchema : null;
   const toolType = (typeof toolObj === 'object' ? toolObj.type : '') || '';
   const configSchema = typeof toolObj === 'object' ? toolObj.configSchema : null;
@@ -680,7 +681,7 @@ function _buildCardEl({ id, mcpId, toolName, driverName, x, y, topicIn: savedTop
       <div class="canvas-card-body-wrap">
         <div class="canvas-card-header">
           <div class="canvas-card-info">
-            <div class="canvas-card-tool" title="${_esc(toolName)}">${typeBadge} ${_esc(toolName)}</div>
+            <div class="canvas-card-tool" title="${_esc(toolName)}">${typeBadge} ${_esc(toolDisplayName)}</div>
             <div class="canvas-card-driver" title="${_esc(driverName)}">${_esc(driverName)}</div>
           </div>
           <button class="tool-card-info-btn canvas-card-info-btn" title="详情"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
@@ -759,7 +760,7 @@ function _buildCardEl({ id, mcpId, toolName, driverName, x, y, topicIn: savedTop
       <div class="canvas-card-body-wrap">
         <div class="canvas-card-header">
           <div class="canvas-card-info">
-            <div class="canvas-card-tool" title="${_esc(toolName)}">${typeBadge} ${_esc(toolName)}</div>
+            <div class="canvas-card-tool" title="${_esc(toolName)}">${typeBadge} ${_esc(toolDisplayName)}</div>
             <div class="canvas-card-driver" title="${_esc(driverName)}">${_esc(driverName)}</div>
           </div>
           ${sensorInstanceCfgBtn}
@@ -915,7 +916,7 @@ function _buildCardEl({ id, mcpId, toolName, driverName, x, y, topicIn: savedTop
       <div class="canvas-card-body-wrap">
         <div class="canvas-card-header">
           <div class="canvas-card-info">
-            <div class="canvas-card-tool" title="${_esc(toolName)}">${typeBadge} ${_esc(toolName)}</div>
+            <div class="canvas-card-tool" title="${_esc(toolName)}">${typeBadge} ${_esc(toolDisplayName)}</div>
             <div class="canvas-card-driver" title="${_esc(driverName)}">${_esc(driverName)}</div>
           </div>
           ${instanceCfgBtn}

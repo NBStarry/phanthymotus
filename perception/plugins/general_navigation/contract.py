@@ -97,10 +97,11 @@ def general_navigation_tool_definition(namespace: str) -> dict:
     root = _root(namespace)
     tool = {
         "name": "navigation",
+        "displayName": "Navigation 2",
         "type": "processor",
         "multiInstance": False,
         "description": (
-            "General Navigation — mapping, saved-map localization, semantic "
+            "Navigation 2 — mapping, saved-map localization, semantic "
             "place tags and Nav2 navigation. This Perception card only emits "
             "bounded velocity proposals; an explicitly authorized Driver loco "
             "actuator owns any physical execution."

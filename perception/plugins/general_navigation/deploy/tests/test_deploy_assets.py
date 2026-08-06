@@ -41,20 +41,36 @@ class NavigationPerceptionDeployAssetsTest(unittest.TestCase):
     def test_service_fragment_has_no_robot_or_host_privilege(self):
         service = (DEPLOY_DIR / "service.yml").read_text()
 
-        self.assertEqual(top_level_keys(service), ["perception"])
+        self.assertEqual(top_level_keys(service), ["perception", "nav2"])
         self.assertIn("  image: __IMAGE__\n", service)
         self.assertIn("  container_name: embodied-perception\n", service)
+        self.assertIn("  depends_on:\n    - nav2\n", service)
         self.assertIn("  read_only: false\n", service)
         self.assertIn("  cap_drop:\n    - ALL\n", service)
-        self.assertIn('  restart: "no"\n', service)
+        self.assertIn("  restart: unless-stopped\n", service)
         self.assertNotIn("  privileged:", service)
         self.assertNotIn("  devices:", service)
-        self.assertNotIn("  volumes:", service)
         self.assertNotIn("  pid:", service)
         self.assertNotIn("  ipc:", service)
         self.assertIn("    - FASTDDS_BUILTIN_TRANSPORTS=UDPv4\n", service)
         self.assertIn(
             "    - CONFIG_PATH=/config/general-navigation.yaml\n", service
+        )
+        self.assertIn("  image: phanthy-nav2:g1-humble-nav2card5\n", service)
+        self.assertIn("  container_name: phanthy-nav2-shadow\n", service)
+        self.assertIn("  read_only: true\n", service)
+        self.assertIn("    - /home/unitree/phanthy-nav2/maps:/maps\n", service)
+        self.assertIn("    - NAV2_MODE=mapping\n", service)
+
+    def test_core_deploy_starts_declared_companions(self):
+        source = (PERCEPTION_DIR.parent / "agent-core/src/api/drivers.py").read_text()
+
+        self.assertIn("Compose owns", source)
+        self.assertNotIn(
+            "'up', '-d', '--no-deps', '--force-recreate', service_name", source
+        )
+        self.assertIn(
+            "'up', '-d', '--force-recreate', service_name", source
         )
 
     def test_dockerfile_is_pinned_and_installs_no_extra_packages(self):

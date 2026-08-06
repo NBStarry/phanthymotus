@@ -3,6 +3,7 @@ from pathlib import Path
 
 
 CANVAS_JS = Path(__file__).resolve().parents[1] / "web/js/canvas.js"
+SIDEBAR_JS = Path(__file__).resolve().parents[1] / "web/js/sidebar.js"
 
 
 class CanvasSchemaFormTest(unittest.TestCase):
@@ -17,6 +18,14 @@ class CanvasSchemaFormTest(unittest.TestCase):
         self.assertIn("field?.style.display === 'none'", execute)
         self.assertIn("fieldSchema.type === 'number'", execute)
         self.assertIn("fieldSchema.type === 'integer'", execute)
+
+    def test_canvas_uses_display_name_without_changing_tool_route_name(self):
+        canvas = CANVAS_JS.read_text(encoding="utf-8")
+        sidebar = SIDEBAR_JS.read_text(encoding="utf-8")
+
+        self.assertIn("toolObj.displayName || toolName", canvas)
+        self.assertIn("const displayName = tool.displayName || tool.name", sidebar)
+        self.assertIn("toolName: tool.name", sidebar)
 
 
 if __name__ == "__main__":
