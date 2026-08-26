@@ -27,7 +27,7 @@ export function initDetailPanel() {
   document.getElementById('detail-close').addEventListener('click', _closePanel);
 }
 
-export function showTopicDetail(topicPath, format) {
+export function showTopicDetail(topicPath, format, mcpId = '') {
   _cleanup();
 
   _panel.classList.remove('hidden');
@@ -42,7 +42,7 @@ export function showTopicDetail(topicPath, format) {
   const Renderer = RENDERERS.find(r => r.canRender(hint)) || ActivityRenderer;
 
   _renderer = Object.assign(Object.create(Object.getPrototypeOf(Renderer)), Renderer);
-  _renderer.mount(body, 'detail');
+  _renderer.mount(body, mcpId || 'detail');
 
   // Connect WebSocket — /ws/bus/* is proxied through agent-core
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';

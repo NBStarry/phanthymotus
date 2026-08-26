@@ -2,8 +2,9 @@
 channel/adapters/feishu.py — Feishu (Lark) adapter。
 
 **接收**用 lark-oapi SDK 的 WebSocket 长连接（出网连接，无需公网 IP / webhook），
-**所有 REST 调用**（发消息、上传/下载资源、健康探测）走 aiohttp 直连开放平台，
-不经过 SDK 的同步客户端——这样错误码可以统一处理，也不用为每个调用开线程池。
+**所有 REST 调用**（发消息、上传/下载资源、健康探测）走 aiohttp，
+并遵循标准的 HTTP(S) 代理环境变量。这些调用不经过 SDK 的同步客户端，
+便于统一处理错误码，也无需为每个调用开线程池。
 
 Requires: pip install lark-oapi
 Config: {app_id, app_secret, domain?}
@@ -118,7 +119,7 @@ class FeishuAdapter(ChannelAdapter):
             }
             url = f'{self._domain}/open-apis/auth/v3/tenant_access_token/internal'
             timeout = aiohttp.ClientTimeout(total=10)
-            async with aiohttp.ClientSession(timeout=timeout) as s:
+            async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as s:
                 async with s.post(url, json=payload) as resp:
                     data = await resp.json(content_type=None)
             code = data.get('code', -1)
@@ -143,7 +144,7 @@ class FeishuAdapter(ChannelAdapter):
         headers = {'Authorization': f'Bearer {token}'}
         timeout = aiohttp.ClientTimeout(total=120 if (data is not None or raw) else 20)
         try:
-            async with aiohttp.ClientSession(timeout=timeout) as s:
+            async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as s:
                 async with s.request(method, url, headers=headers, json=json_body,
                                      params=params, data=data) as resp:
                     ctype = resp.headers.get('Content-Type', '')

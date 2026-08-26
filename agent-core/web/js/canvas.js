@@ -850,7 +850,7 @@ function _buildCardEl({ id, mcpId, toolName, driverName, x, y, topicIn: savedTop
       e.stopPropagation();
       const liveMcp = _allMcps.find(m => m.id === mcpId);
       const topics = topicOut.length ? topicOut : (liveMcp?.topic_out || []);
-      if (topics.length) showTopicDetail(topics[0].topic, topics[0].format || '');
+      if (topics.length) showTopicDetail(topics[0].topic, topics[0].format || '', mcpId);
     });
 
     const sensorExecBtn = el.querySelector('.canvas-exec-btn');
@@ -1043,7 +1043,7 @@ function _buildCardEl({ id, mcpId, toolName, driverName, x, y, topicIn: savedTop
         e.stopPropagation();
         const liveMcp = _allMcps.find(m => m.id === mcpId);
         const topics = topicOut.length ? topicOut : (liveMcp?.topic_out || []);
-        if (topics.length) showTopicDetail(topics[0].topic, topics[0].format || '');
+        if (topics.length) showTopicDetail(topics[0].topic, topics[0].format || '', mcpId);
       });
     }
 

@@ -32,6 +32,14 @@ Deploy hardware drivers from **[phanthymotus-driver](https://github.com/4paradig
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for building and running from source code.
 
+### Simulation branch
+
+The `NBStarry/phanthymotus:sim` branch carries source-level conveniences for the
+isolated MuJoCo/Gazebo development environment. It is maintained as a tested,
+commit-pinned integration branch rather than an upstream contribution. See
+[`docs/simulation-branch.md`](docs/simulation-branch.md) for its scope and sync
+rules.
+
 ## Features
 
 - **Visual Orchestration** — Drag-and-drop web dashboard for connecting devices, sensors, and AI models on a canvas
@@ -338,4 +346,3 @@ its dashboard.
 ## License
 
 [Apache License 2.0](LICENSE)
-
