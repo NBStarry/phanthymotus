@@ -132,6 +132,31 @@ Format: `category/format`
 | `state/` | `joint`, `pose`, `power` |
 | `text/` | `asr`, `plain` |
 
+#### `sensor/imu`
+
+`sensor/imu` denotes a native `sensor_msgs/msg/Imu` ROS 2 topic. Agent Core
+subscribes with that native type and converts each sample to this versioned
+JSON payload for WebSocket consumers and the IMU renderer:
+
+```json
+{
+  "schema": "phanthy.sensor.imu.v1",
+  "frame_id": "livox_frame",
+  "stamp_ns": 1780000000000000000,
+  "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+  "orientation_covariance": [0, 0, 0, 0, 0, 0, 0, 0, 0],
+  "angular_velocity_rad_s": {"x": 0, "y": 0, "z": 0},
+  "angular_velocity_covariance": [0, 0, 0, 0, 0, 0, 0, 0, 0],
+  "linear_acceleration_m_s2": {"x": 0, "y": 0, "z": 9.80665},
+  "linear_acceleration_covariance": [0, 0, 0, 0, 0, 0, 0, 0, 0]
+}
+```
+
+Quaternion components are unitless. Angular velocity is rad/s, linear
+acceleration is m/s², covariance arrays preserve ROS row-major order and units,
+and `stamp_ns` is copied from the ROS header. Drivers must not publish a
+`std_msgs/msg/String` under this format.
+
 ## Configuration
 
 All runtime configuration is managed through the Web UI and persisted to SQLite (`resource/data.db`) via the `ConfigDB` class.

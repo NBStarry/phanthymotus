@@ -63,6 +63,44 @@ export const OdometryRenderer = {
   },
 };
 
+export const ImuRenderer = {
+  name: 'imu',
+  canRender: (hint) => hint === 'sensor/imu',
+  _el: null,
+  _content: null,
+
+  mount(container) {
+    this._el = document.createElement('div');
+    this._el.style.cssText =
+      'width:100%;height:100%;box-sizing:border-box;padding:14px;' +
+      'display:flex;align-items:center;background:#080b09;color:#eef7f0';
+    this._content = document.createElement('div');
+    this._content.style.cssText = 'width:100%;font-family:monospace;font-size:13px;line-height:1.7';
+    this._el.appendChild(this._content);
+    container.appendChild(this._el);
+  },
+
+  onData(buffer) {
+    const data = _decode(buffer);
+    if (!data?.angular_velocity_rad_s || !data?.linear_acceleration_m_s2) return;
+    const gyro = data.angular_velocity_rad_s;
+    const accel = data.linear_acceleration_m_s2;
+    const q = data.orientation || {};
+    this._content.innerHTML =
+      `<div style="font:11px sans-serif;opacity:.55;margin-bottom:7px">${_escapeHtml(data.frame_id || '—')}</div>` +
+      `<b>GYRO rad/s</b><br>x ${_fmt(gyro.x)} &nbsp; y ${_fmt(gyro.y)} &nbsp; z ${_fmt(gyro.z)}<br>` +
+      `<b>ACCEL m/s²</b><br>x ${_fmt(accel.x)} &nbsp; y ${_fmt(accel.y)} &nbsp; z ${_fmt(accel.z)}<br>` +
+      `<b>ORIENTATION xyzw</b><br>${_fmt(q.x)} &nbsp; ${_fmt(q.y)} &nbsp; ${_fmt(q.z)} &nbsp; ${_fmt(q.w)}`;
+  },
+
+  onDataSilent(buffer) { this.onData(buffer); },
+  unmount() {
+    this._el?.remove();
+    this._el = null;
+    this._content = null;
+  },
+};
+
 export const PathRenderer = {
   name: 'path',
   canRender: (hint) => hint === 'sensor/path',

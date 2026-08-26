@@ -35,6 +35,29 @@ def _header(frame_id="map", sec=12, nanosec=34):
 
 
 class Ros2BridgeNavigationEncodingTest(unittest.TestCase):
+    def test_imu_is_encoded_with_explicit_units_and_covariances(self) -> None:
+        message = SimpleNamespace(
+            header=_header(frame_id="livox_frame"),
+            orientation=SimpleNamespace(x=0.1, y=0.2, z=0.3, w=0.9),
+            orientation_covariance=list(range(9)),
+            angular_velocity=_vector(0.4, 0.5, 0.6),
+            angular_velocity_covariance=list(range(9, 18)),
+            linear_acceleration=_vector(1.0, 2.0, 9.8),
+            linear_acceleration_covariance=list(range(18, 27)),
+        )
+
+        payload = json.loads(ros2_bridge._encode_message(message, "sensor/imu"))
+
+        self.assertEqual(payload["schema"], "phanthy.sensor.imu.v1")
+        self.assertEqual(payload["frame_id"], "livox_frame")
+        self.assertEqual(payload["stamp_ns"], 12_000_000_034)
+        self.assertEqual(payload["orientation"]["w"], 0.9)
+        self.assertEqual(payload["angular_velocity_rad_s"]["z"], 0.6)
+        self.assertEqual(payload["linear_acceleration_m_s2"]["z"], 9.8)
+        self.assertEqual(len(payload["orientation_covariance"]), 9)
+        self.assertEqual(len(payload["angular_velocity_covariance"]), 9)
+        self.assertEqual(len(payload["linear_acceleration_covariance"]), 9)
+
     def test_odometry_is_encoded_as_navigation_json(self) -> None:
         message = SimpleNamespace(
             header=_header(),
