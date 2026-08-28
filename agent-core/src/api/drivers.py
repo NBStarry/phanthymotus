@@ -4,6 +4,7 @@ Manifest stored in SQLite config DB (key: 'drivers'). Populated via registry syn
 """
 
 import asyncio
+import json
 import os
 from typing import Optional
 
@@ -28,13 +29,56 @@ _SERVICE_ENDPOINTS: dict[str, dict] = {
 
 # ── Manifest persistence ───────────────────────────────────────────────────
 
+def _load_local_manifest() -> list:
+    """Load an optional sim-only manifest supplied by the runtime.
+
+    Production remains unchanged because LOCAL_SERVICES_MANIFEST is unset there.
+    The runtime-owned file lets the simulation Core manage local amd64 services
+    that intentionally do not exist in Resource Center.
+    """
+    path = os.environ.get('LOCAL_SERVICES_MANIFEST', '').strip()
+    if not path:
+        return []
+    try:
+        with open(path, encoding='utf-8') as f:
+            payload = json.load(f)
+    except Exception as exc:
+        raise RuntimeError(f'failed to load local services manifest {path}: {exc}') from exc
+    if not isinstance(payload, list):
+        raise RuntimeError(f'local services manifest must contain a list: {path}')
+
+    result = []
+    seen = set()
+    for raw in payload:
+        if not isinstance(raw, dict) or not raw.get('id') or not raw.get('image'):
+            raise RuntimeError(f'local service requires id and image: {raw!r}')
+        if raw['id'] in seen:
+            raise RuntimeError(f'duplicate local service id: {raw["id"]}')
+        seen.add(raw['id'])
+        entry = dict(raw)
+        entry['local_managed'] = True
+        result.append(entry)
+    return result
+
+
 def _load_manifest() -> list:
     drivers = _config.main.get('drivers')
-    return list(drivers) if drivers is not None else []
+    merged = {
+        d['id']: dict(d)
+        for d in (list(drivers) if drivers is not None else [])
+        if isinstance(d, dict) and d.get('id')
+    }
+    for entry in _load_local_manifest():
+        merged[entry['id']] = entry
+    return list(merged.values())
 
 
 def _save_manifest(drivers: list) -> None:
-    _config.main['drivers'] = drivers
+    # Runtime-owned local entries are read from their file on every request.
+    # Never copy them into SQLite, otherwise removing the explicit environment
+    # configuration would leave stale services behind.
+    local_ids = {d['id'] for d in _load_local_manifest()}
+    _config.main['drivers'] = [d for d in drivers if d.get('id') not in local_ids]
 
 
 # ── Docker helpers ─────────────────────────────────────────────────────────
@@ -117,13 +161,22 @@ def _deploy_sync(driver: dict) -> dict:
     name = _container_name(driver['id'], driver.get('container_name', ''))
     target_image = driver['image']
 
-    # Check if already running with the same image — skip re-deploy
+    # Reuse an existing exact-image container before pulling. This is the normal
+    # WebUI start path after stop, and is essential for local simulation images
+    # that deliberately have no remote registry counterpart.
     try:
         existing = client.containers.get(name)
-        if existing.status == 'running':
-            running_image = existing.attrs.get('Config', {}).get('Image', '')
-            if running_image == target_image:
+        running_image = existing.attrs.get('Config', {}).get('Image', '')
+        if running_image == target_image:
+            if existing.status == 'running':
                 return {'status': 'running', 'message': 'already running with same image', 'skipped': True}
+            existing.start()
+            return {
+                'status': 'starting',
+                'message': 'started existing container with same image',
+                'container_name': name,
+                'reused': True,
+            }
     except docker_sdk.errors.NotFound:
         pass
 
@@ -456,8 +509,11 @@ async def drivers_list():
                 'description':   d.get('description', ''),
                 'category':      'core',
                 'mcp_url':       d.get('mcp_url', ''),
+                'running':       True,
+                'status':        'running',
                 'running_image': f'{base}:{self_tag}',
                 'last_deploy':   d.get('last_deploy'),
+                'local_managed': d.get('local_managed', False),
             })
         else:
             status_info = await _run_in_executor(_get_status_sync, d['id'], d.get('container_name', ''))
@@ -473,6 +529,7 @@ async def drivers_list():
                 'status':        status_info.get('status', 'stopped'),
                 'running_image': status_info.get('running_image', ''),
                 'last_deploy':   d.get('last_deploy'),
+                'local_managed': d.get('local_managed', False),
             })
     return {'code': 200, 'data': result}
 
@@ -584,4 +641,3 @@ async def driver_status(driver_id: str):
     cn = entry.get('container_name', '') if entry else ''
     status = await _run_in_executor(_get_status_sync, driver_id, cn)
     return {'code': 200, 'data': status}
-

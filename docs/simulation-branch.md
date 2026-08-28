@@ -37,6 +37,8 @@ git merge --no-ff upstream/main
 ## 当前本地修改
 
 - Feishu REST 鉴权、健康探测和 Open API 调用遵循标准 HTTP(S) 代理环境变量；
-- Canvas 的数据流详情向 renderer 传递真实 MCP id，与监控面板使用同一 Driver 模型。
+- Canvas 的数据流详情向 renderer 传递真实 MCP id，与监控面板使用同一 Driver 模型；
+- 显式设置 `LOCAL_SERVICES_MANIFEST` 时，Core 会将运行时提供的本地仿真镜像纳入
+  标准「我的服务」和 Docker 生命周期；正式环境未设置该变量时行为不变。
 
-两项行为都有源码内回归测试，不再由构建时 patch 产生。
+上述行为都有源码内回归测试，不再由构建时 patch 产生。

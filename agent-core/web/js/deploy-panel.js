@@ -171,6 +171,7 @@ async function _loadStatuses() {
         last_deploy:   d.last_deploy || null,
         name:          d.name || '',
         category:      d.category || 'driver',
+        local_managed: Boolean(d.local_managed),
       };
     }
   } catch { /* keep existing */ }
@@ -227,6 +228,7 @@ function _renderMyServices() {
       _cat:      s.category || 'driver',
       _id:       id,
       _orphan:   true,
+      _localManaged: Boolean(s.local_managed),
       // _svcRowHTML 取 model（driver）或 name（其余），两个都给，否则会退化成裸镜像地址
       name:      friendly,
       model:     friendly,
@@ -395,7 +397,9 @@ function _svcRowHTML({ item, id, s, latestTag, currentTag, hasUpdate }) {
     if (lastImage) {
       actions += `<button class="svc-btn svc-btn-start" data-action="start" data-driver-id="${id}" data-image="${lastImage}">启动</button>`;
     }
-    actions += `<button class="svc-btn svc-btn-remove" data-action="remove" data-driver-id="${id}">卸载</button>`;
+    if (!s.local_managed) {
+      actions += `<button class="svc-btn svc-btn-remove" data-action="remove" data-driver-id="${id}">卸载</button>`;
+    }
   }
 
   // Log button (always available)
@@ -415,7 +419,9 @@ function _svcRowHTML({ item, id, s, latestTag, currentTag, hasUpdate }) {
         <span class="svc-row-name">${label}</span>
         <div class="svc-row-version-line">
           <span class="svc-row-version">${versionText}</span>
-          ${item._orphan ? '<span class="svc-ver-channel" title="该镜像与本机架构不匹配，或已从资源中心下架">架构不匹配</span>' : ''}
+          ${item._localManaged
+            ? '<span class="svc-ver-channel" title="本地仿真镜像，不从正式 Resource Center 更新">本地仿真</span>'
+            : item._orphan ? '<span class="svc-ver-channel" title="该镜像与本机架构不匹配，或已从资源中心下架">架构不匹配</span>' : ''}
           ${hasUpdate ? `<span class="svc-row-arrow">→</span><span class="svc-row-new-version">${latestTag}</span>` : ''}
         </div>
       </div>
