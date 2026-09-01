@@ -160,6 +160,7 @@ TOOLS = [
             },
             "x-hooks": {
                 "on_interrupt_speak": {"action": "interrupt"},
+                "on_kws_interrupt": {"action": "interrupt"},
             }
         },
         "configSchema": {
@@ -297,6 +298,7 @@ class _TTSNode(Node):
         self._worker_thread: Optional[threading.Thread] = None
         self._stop_event   = threading.Event()
         self._interrupt_flag = threading.Event()  # 打断标志：设置后立即停止当前 utterance
+        self._speaking = threading.Event()
         from audio_msgs.msg import AudioChunk
         self._pub = self.create_publisher(AudioChunk, self._output_topic, _LOW_LAT_QOS)
         self._perf_pub = self.create_publisher(String, '/perception/perf_spans', _LOW_LAT_QOS)
@@ -358,8 +360,9 @@ class _TTSNode(Node):
         # 清空待播放队列。丢掉的 item 必须逐个回 ACP cancelled，否则 agent-core
         # 的 barrier 会为每个注册过的 action 干等到超时。
         cleared = self._complete_discarded_actions()
-        # 设置 interrupt flag（worker 在每个 frame 前检查）
-        self._interrupt_flag.set()
+        # An idle interrupt must not poison the next utterance.
+        if self._speaking.is_set():
+            self._interrupt_flag.set()
         log.info(f"[tts] interrupted: cleared {cleared} queued item(s)")
         return {"status": "interrupted", "cleared": cleared}
 
@@ -411,6 +414,7 @@ class _TTSNode(Node):
                 item = self._text_queue.get(timeout=1)
             except queue.Empty:
                 continue
+            self._speaking.set()
             # Unpack queue item: (text, trace_id, action_id) or legacy formats
             if isinstance(item, tuple):
                 if len(item) == 3:
@@ -614,6 +618,7 @@ class _TTSNode(Node):
                 _complete_action(_action_id, text, 0, interrupted=True)
                 self._publish_eof()
             finally:
+                self._speaking.clear()
                 # Release the synth thread on every path, including the one where
                 # the consumer above died: it can otherwise sit on a blocking put
                 # forever, holding a reference to the adapter.

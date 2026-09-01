@@ -438,6 +438,26 @@ Notes:
 
 ---
 
+## kws_interrupt
+
+`trigger_mode: kws_interrupt` is a separate KWS path for speech barge-in; the
+existing `kws` mode is unchanged. A wake hit immediately fires
+`on_kws_interrupt`, which stops Perception TTS and the physical speaker without
+stopping motion. The wake phrase's VAD segment is discarded, then ASR waits up
+stopping motion. Audio before the KWS hit is discarded and ASR waits up to five
+seconds for a command. If speech continues after the KWS hit, only that
+post-hit tail is retained; otherwise the next utterance is captured. Speech that
+starts before the deadline runs through its normal VAD end, even if that end is
+later than five seconds.
+
+Agent Core gates only new `tts.speak` calls during this window. No speech releases
+the gate so Core can continue its previous action; a recognized command cancels
+stale speech, is steered into the current conversation context, and lets Core
+decide the next utterance. A 35-second Core failsafe prevents permanent silence
+if the ASR worker disappears after opening the window.
+
+---
+
 ## asr_kws and espeak
 
 `trigger_mode: asr_kws` transcribes every utterance and gates on a phoneme-level

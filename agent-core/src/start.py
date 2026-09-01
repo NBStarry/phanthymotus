@@ -588,6 +588,21 @@ async def hooks_fire(request: fastapi.Request):
     params = body.get('params', {})
     if not hook_id:
         return {'error': 'hook field required'}
+    if hook_id == 'on_kws_interrupt':
+        hooks.open_speech_gate()
+    elif hook_id == 'on_kws_interrupt_timeout':
+        hooks.release_speech_gate('timeout', clear=True)
+        import event_bus
+        await event_bus.enqueue(
+            source='asr:kws_interrupt_timeout',
+            text=json.dumps({
+                'type': 'kws_interrupt_timeout',
+                'priority': 1,
+                'reason': params.get('reason', 'no_speech'),
+                'text': ('No usable speech arrived in the KWS interruption window. '
+                         'Continue the prior action and let Core decide whether to speak.'),
+            }),
+        )
     results = await hooks.fire(hook_id, extra_params=params)
     return {'ok': True, 'hook': hook_id, 'results': results}
 

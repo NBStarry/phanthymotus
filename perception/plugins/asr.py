@@ -39,6 +39,7 @@ AUDIO_FORMAT       = "audio/pcm-16k"
 # it rather than warning on every chunk of a path that already works.
 _AUDIO_FORMAT_ALIASES = frozenset({AUDIO_FORMAT, "pcm_16k_16bit_mono"})
 MIN_CHUNK_BYTES    = 1024  # 512 samples — one Silero VAD window
+KWS_INTERRUPT_WINDOW_S = 5.0
 
 # Upper bound on how long `start` waits for a background model load. Prevents a
 # stalled download from pinning an MCP worker thread indefinitely.
@@ -50,6 +51,13 @@ _LOW_LAT_QOS = QoSProfile(
     depth=50,
     durability=DurabilityPolicy.VOLATILE,
 )
+
+
+def _kws_interrupt_timed_out(opened_at: float | None,
+                             speech_started: bool, now: float) -> bool:
+    """The post-wake window expires only if no command speech has started."""
+    return (opened_at is not None and not speech_started
+            and now >= opened_at + KWS_INTERRUPT_WINDOW_S)
 
 
 # ── IPA phoneme matching for asr_kws mode ────────────────────────────────────
@@ -372,9 +380,9 @@ TOOLS = [
                                                  "never gives back — check headroom before enabling",
                                   "default": "cpu", "scope": "shared",
                                   "x-show-when": {"asr_model": ["paraformer-zh-en", "sensevoice-small"]}},
-                "trigger_mode":  {"type": "string", "enum": ["vad", "kws", "asr_kws"], "description": "Trigger mode (vad = always listen, kws = KWS model, asr_kws = ASR + phoneme matching)", "default": "kws", "scope": "shared"},
-                "kws_model":     {"type": "string", "enum": ["zh", "en", "zh-en"], "description": "KWS 模型 (zh=纯中文, en=纯英文, zh-en=双语)", "default": "zh", "scope": "shared", "x-show-when": {"trigger_mode": "kws"}},
-                "kws_keywords":  {"type": "string", "description": "Wake word (zh: 'f àn sh ì x iǎo g ǒu @范式小狗', en: '▁FA N C Y ▁RO B O T @FANCY_ROBOT')", "scope": "shared", "x-show-when": {"trigger_mode": "kws"}},
+                "trigger_mode":  {"type": "string", "enum": ["vad", "kws", "kws_interrupt", "asr_kws"], "description": "Trigger mode (vad = always listen, kws = KWS model, kws_interrupt = interrupt speech then listen for one command, asr_kws = ASR + phoneme matching)", "default": "kws", "scope": "shared"},
+                "kws_model":     {"type": "string", "enum": ["zh", "en", "zh-en"], "description": "KWS 模型 (zh=纯中文, en=纯英文, zh-en=双语)", "default": "zh", "scope": "shared", "x-show-when": {"trigger_mode": ["kws", "kws_interrupt"]}},
+                "kws_keywords":  {"type": "string", "description": "Wake word (zh: 'f àn sh ì x iǎo g ǒu @范式小狗', en: '▁FA N C Y ▁RO B O T @FANCY_ROBOT')", "scope": "shared", "x-show-when": {"trigger_mode": ["kws", "kws_interrupt"]}},
                 "asr_kws_keyword": {"type": "string", "description": "唤醒词文本（如'范式小狗'、'hello robot'）", "scope": "shared", "x-show-when": {"trigger_mode": "asr_kws"}},
                 "asr_kws_threshold": {"type": "number", "description": "音素匹配阈值（0-1，越小越严格，推荐0.3）", "default": 0.3, "scope": "shared", "x-show-when": {"trigger_mode": "asr_kws"}},
                 "vad_threshold": {"type": "number", "description": "VAD speech threshold (0-1, higher = stricter)", "default": 0.5, "scope": "shared"},
@@ -899,7 +907,8 @@ def _vad_worker(pcm_q: multiprocessing.Queue, result_q: multiprocessing.Queue,
     # ── Initialize KWS (optional) ──
     kws_spotter = None
     kws_stream = None
-    kws_enabled = (kws_cfg.get('trigger_mode', 'kws') == 'kws') if kws_cfg else False
+    trigger_mode = kws_cfg.get('trigger_mode', 'kws') if kws_cfg else 'vad'
+    kws_enabled = trigger_mode in ('kws', 'kws_interrupt')
     if kws_enabled:
         # Select KWS model based on kws_model config
         kws_model_variant = kws_cfg.get('kws_model', 'zh')
@@ -967,6 +976,8 @@ def _vad_worker(pcm_q: multiprocessing.Queue, result_q: multiprocessing.Queue,
             _log.info("[vad-worker] KWS enabled but no keywords configured, disabling")
             kws_enabled = False
 
+    kws_interrupt_enabled = kws_enabled and trigger_mode == 'kws_interrupt'
+
     # ── State machine ──
     # States: 'waiting_wake' (KWS mode) or 'listening' (direct mode / post-wake)
     state = 'waiting_wake' if kws_enabled else 'listening'
@@ -976,6 +987,8 @@ def _vad_worker(pcm_q: multiprocessing.Queue, result_q: multiprocessing.Queue,
     end_ts = None
     kws_cooldown_until = 0.0
     _was_speaking = False  # Track speech onset for hook notification
+    interrupt_opened_at = None
+    interrupt_speech_started = False
 
     _log.info(f"[vad-worker] process started (pid={os.getpid()}, backend=sherpa_onnx, kws={kws_enabled})")
     audio_count = 0
@@ -1054,8 +1067,25 @@ def _vad_worker(pcm_q: multiprocessing.Queue, result_q: multiprocessing.Queue,
         _enforce_retention()
 
     while not stop_evt.is_set():
+        now_monotonic = time.monotonic()
+        if kws_interrupt_enabled and _kws_interrupt_timed_out(
+                interrupt_opened_at, interrupt_speech_started, now_monotonic):
+            result_q.put(("kws_interrupt_timeout", time.time(), "no_speech"))
+            state = 'waiting_wake'
+            _kws_triggered = False
+            speech_buf = b''
+            start_ts = None
+            end_ts = None
+            interrupt_opened_at = None
+            interrupt_speech_started = False
+            _was_speaking = False
+
+        queue_timeout = 1.0
+        if interrupt_opened_at is not None and not interrupt_speech_started:
+            remaining = interrupt_opened_at + KWS_INTERRUPT_WINDOW_S - time.monotonic()
+            queue_timeout = max(0.01, min(queue_timeout, remaining))
         try:
-            pcm, ts = pcm_q.get(timeout=1)
+            pcm, ts = pcm_q.get(timeout=queue_timeout)
         except Exception:
             continue
 
@@ -1091,9 +1121,22 @@ def _vad_worker(pcm_q: multiprocessing.Queue, result_q: multiprocessing.Queue,
                         # Transition to listening — start recording immediately
                         state = 'listening'
                         _kws_triggered = True
-                        speech_buf = pcm  # include current frame (user may already be speaking)
-                        start_ts = ts
-                        end_ts = ts
+                        if kws_interrupt_enabled:
+                            # Interrupt now. If the speaker continues without a
+                            # pause, retain only audio after the KWS hit; a wake-only
+                            # tail is too short to emit and the window stays open.
+                            continuing = vad.is_speech_detected()
+                            speech_buf = pcm if continuing else b''
+                            start_ts = ts if continuing else None
+                            end_ts = ts if continuing else None
+                            interrupt_opened_at = time.monotonic()
+                            interrupt_speech_started = continuing
+                            _was_speaking = continuing
+                            result_q.put(("kws_interrupt_open", ts, kw.strip()))
+                        else:
+                            speech_buf = pcm  # include current frame (user may already be speaking)
+                            start_ts = ts
+                            end_ts = ts
                         # Reset KWS stream for next wake
                         kws_stream = kws_spotter.create_stream()
             # Drain any completed VAD segments (discard in wake-wait mode)
@@ -1106,8 +1149,14 @@ def _vad_worker(pcm_q: multiprocessing.Queue, result_q: multiprocessing.Queue,
         elif state == 'listening':
             # Detect speech onset → notify main thread for on_hearing hook
             _is_speaking = vad.is_speech_detected()
+            if (kws_interrupt_enabled and interrupt_speech_started and _is_speaking
+                    and start_ts is not None):
+                speech_buf += pcm
+                end_ts = ts
             if _is_speaking and not _was_speaking:
                 result_q.put(("speech_start", ts, ts, False))
+                if kws_interrupt_enabled:
+                    interrupt_speech_started = True
             _was_speaking = _is_speaking
 
             # Collect completed VAD segments.
@@ -1124,7 +1173,11 @@ def _vad_worker(pcm_q: multiprocessing.Queue, result_q: multiprocessing.Queue,
                                        *[int(max(-32768, min(32767, s * 32768))) for s in seg.samples])
                 # `is None`, not falsy: a legitimate start_ts of 0.0 would
                 # otherwise be re-stamped.
-                if start_ts is None:
+                if kws_interrupt_enabled and start_ts is not None:
+                    # Continuous wake+command path: speech_buf already contains
+                    # only frames observed after the keyword hit.
+                    pre_pcm = b''
+                elif start_ts is None:
                     pre_pcm = pcm_history.pre_roll(
                         getattr(seg, 'start', None),
                         len(seg.samples),
@@ -1158,6 +1211,9 @@ def _vad_worker(pcm_q: multiprocessing.Queue, result_q: multiprocessing.Queue,
                     # Return to waiting for wake word (if KWS enabled)
                     if kws_enabled:
                         state = 'waiting_wake'
+                        if kws_interrupt_enabled:
+                            interrupt_opened_at = None
+                            interrupt_speech_started = False
                         # Stop draining here. Without the break, segments still
                         # queued in the VAD keep being treated as an active
                         # listening session and can emit a second utterance in
@@ -1167,8 +1223,40 @@ def _vad_worker(pcm_q: multiprocessing.Queue, result_q: multiprocessing.Queue,
                         # the VAD had queued. The remainder belongs to
                         # waiting_wake, which drains it next round.
                         break
+                elif kws_interrupt_enabled:
+                    # Ignore sub-500 ms clicks/noise and keep the original
+                    # deadline. A real utterance that started before the
+                    # deadline may run past it and is handled above.
+                    speech_buf = b''
+                    start_ts = None
+                    end_ts = None
+                    interrupt_speech_started = False
 
     _log.info("[vad-worker] process exiting")
+
+
+def _fire_core_hook(hook_id: str, params: dict | None = None) -> None:
+    """Fire an Agent Core hook from the ASR worker thread."""
+    try:
+        import json as _json_hook
+        import ssl as _ssl
+        import urllib.request as _urllib_req
+
+        body = {"hook": hook_id}
+        if params:
+            body["params"] = params
+        request = _urllib_req.Request(
+            "https://localhost:15678/api/hooks/fire",
+            data=_json_hook.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        context = _ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = _ssl.CERT_NONE
+        _urllib_req.urlopen(request, timeout=2, context=context)
+    except Exception as error:
+        log.debug(f"[asr] fire {hook_id} failed: {error}")
 
 
 # ── ROS2 Node ─────────────────────────────────────────────────────────────────
@@ -1450,26 +1538,23 @@ class _ASRNode(Node):
         self._worker_ready.set()
 
         while not self._stop_event.is_set():
+            _kws_from_vad = False
             try:
                 item = self._utterance_queue.get(timeout=1)
+                if len(item) >= 2 and item[0] == "kws_interrupt_open":
+                    _fire_core_hook("on_kws_interrupt", {
+                        "wake_ts": item[1],
+                        "keyword": item[2] if len(item) > 2 else "",
+                    })
+                    continue
+                if len(item) >= 2 and item[0] == "kws_interrupt_timeout":
+                    _fire_core_hook("on_kws_interrupt_timeout", {
+                        "reason": item[2] if len(item) > 2 else "no_speech",
+                    })
+                    continue
                 # Handle speech onset signal from VAD worker
                 if len(item) >= 2 and item[0] == "speech_start":
-                    try:
-                        import urllib.request as _urllib_req
-                        import json as _json_hook
-                        _hook_req = _urllib_req.Request(
-                            "https://localhost:15678/api/hooks/fire",
-                            data=_json_hook.dumps({"hook": "on_hearing"}).encode(),
-                            headers={"Content-Type": "application/json"},
-                            method="POST"
-                        )
-                        import ssl as _ssl
-                        _ctx = _ssl.create_default_context()
-                        _ctx.check_hostname = False
-                        _ctx.verify_mode = _ssl.CERT_NONE
-                        _urllib_req.urlopen(_hook_req, timeout=2, context=_ctx)
-                    except Exception as _he:
-                        log.debug(f"[asr] fire on_hearing failed: {_he}")
+                    _fire_core_hook("on_hearing")
                     continue
                 if len(item) == 4:
                     utterance, start_ts, end_ts, _kws_from_vad = item
@@ -1488,7 +1573,10 @@ class _ASRNode(Node):
                 _spans.append({"span": "asr_transcribe", "component": "perception",
                                "start_ts": _t0, "end_ts": time.time(),
                                "meta": {"audio_ms": int(len(utterance) / 32)}})
-                if not text.strip(): continue
+                if not text.strip():
+                    if trigger_mode == 'kws_interrupt' and _kws_from_vad:
+                        _fire_core_hook("on_kws_interrupt_timeout", {"reason": "empty_asr"})
+                    continue
 
                 # ASR-based keyword spotting
                 if trigger_mode == 'asr_kws' and keyword_ipa:
@@ -1525,12 +1613,15 @@ class _ASRNode(Node):
                           "text_length": len(text),
                           "priority": 1,
                           "kws_triggered": _kws_was_triggered,
+                          "kws_interrupt": trigger_mode == 'kws_interrupt' and _kws_from_vad,
                           "spans": _spans}
                 msg = String(); msg.data = json.dumps(result, ensure_ascii=False)
                 self._pub.publish(msg)
                 log.info(f"[asr] {text!r}")
             except Exception as e:
                 log.error(f"[asr] transcribe error: {e}", exc_info=True)
+                if trigger_mode == 'kws_interrupt' and _kws_from_vad:
+                    _fire_core_hook("on_kws_interrupt_timeout", {"reason": "asr_error"})
 
     def _status_dict(self) -> dict:
         return {

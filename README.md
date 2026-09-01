@@ -313,6 +313,8 @@ System Event (ASR arrives / LLM starts / error)
 |------|---------|---------|
 | `on_hearing` | Voice activity detected | LED blink blue |
 | `on_kws_wakeup` | Wake word detected | LED solid blue 2s |
+| `on_kws_interrupt` | `kws_interrupt` wake word detected | Stop TTS + speaker, keep motion running |
+| `on_kws_interrupt_timeout` | No usable command in the interrupt window | Ask Core to continue the prior action |
 | `on_thinking` | LLM inference starts | LED rainbow breathe |
 | `on_error` | LLM failure | LED red flash 5s |
 | `on_interrupt_all` | User barge-in | Stop TTS + motion |
@@ -338,4 +340,3 @@ its dashboard.
 ## License
 
 [Apache License 2.0](LICENSE)
-

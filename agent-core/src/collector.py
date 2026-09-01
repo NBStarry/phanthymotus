@@ -46,6 +46,27 @@ _interrupt_mode: str = "steer"
 _barge_in_threshold_ms: int = 500
 
 
+def _event_payload(ev: dict) -> dict:
+    """Return a JSON payload whether it arrived in ``payload`` or DDS ``text``."""
+    payload = ev.get('payload', {})
+    if isinstance(payload, str):
+        try:
+            payload = _json.loads(payload)
+        except (ValueError, TypeError):
+            payload = {}
+    if isinstance(payload, dict) and payload:
+        return payload
+    text = ev.get('text', '')
+    if isinstance(text, str) and text.startswith('{'):
+        try:
+            parsed = _json.loads(text)
+            if isinstance(parsed, dict):
+                return parsed
+        except (ValueError, TypeError):
+            pass
+    return payload if isinstance(payload, dict) else {}
+
+
 def _extract_priority(ev: dict) -> int:
     """从事件中解析 priority。JSON text 中的 priority 字段优先，否则按 source 匹配。"""
     text = ev.get('text', '')
@@ -353,6 +374,7 @@ def _build_trigger(batch: list[dict], urgent: bool) -> dict:
         '_channel_message_ids': channel_message_ids(batch),
         '_bot_channel_message_ids': [p['message_id'] for p in bot_payloads
                                      if isinstance(p.get('message_id'), str) and p['message_id']],
+        '_kws_interrupt': any(e.get('_kws_interrupt') for e in batch),
     }
     from channel.manager import manager as channel_manager
     for payload in trusted_payloads:
@@ -599,15 +621,14 @@ async def _drain_loop():
 
         # KWS wake-word hook (fires regardless of busy state)
         if 'asr' in source.lower():
-            payload = ev.get('payload', {})
-            if isinstance(payload, str):
-                try:
-                    import json as _json
-                    payload = _json.loads(payload)
-                except Exception:
-                    payload = {}
-            if payload.get('kws_triggered'):
-                import hooks
+            payload = _event_payload(ev)
+            import hooks
+            if payload.get('kws_interrupt'):
+                ev['_kws_interrupt'] = True
+                hooks.release_speech_gate('command')
+            elif payload.get('type') == 'kws_interrupt_timeout':
+                ev['_kws_interrupt_timeout'] = True
+            elif payload.get('kws_triggered'):
                 asyncio.create_task(hooks.fire('on_kws_wakeup'))
 
         # Ring buffer 始终存储（所有事件，供 raw_input_info 查询）
@@ -622,7 +643,8 @@ async def _drain_loop():
             else:
                 # Barge-in 检测：ASR 事件 duration 不足时视为 backchannel，丢弃
                 if 'asr' in source.lower() and _barge_in_threshold_ms > 0:
-                    duration_ms = ev.get('payload', {}).get('duration_ms', 0)
+                    payload = _event_payload(ev)
+                    duration_ms = payload.get('duration_ms', payload.get('audio_duration_ms', 0))
                     if 0 < duration_ms < _barge_in_threshold_ms:
                         continue  # backchannel，不打断
 
@@ -632,6 +654,16 @@ async def _drain_loop():
                     if _asr_text and _pending_has_same_asr_text(_asr_text):
                         print(f'[collector] dedup: ASR text "{_asr_text[:30]}" already pending, skip')
                         continue
+
+                # KWS interruption events are speech-only: always steer them
+                # into the current context, even if the global mode would cancel
+                # the turn (whose cancellation path also stops robot motion).
+                if ev.get('_kws_interrupt') or ev.get('_kws_interrupt_timeout'):
+                    try:
+                        _steering_queue.put_nowait(ev)
+                    except asyncio.QueueFull:
+                        _priority_pending.append(ev)
+                    continue
 
                 # 按模式处理
                 if _interrupt_mode == 'steer':

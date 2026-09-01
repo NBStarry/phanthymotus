@@ -28,6 +28,67 @@ class HookBinding:
 
 _registry: dict[str, list[HookBinding]] = {}
 _fire_log: deque = deque(maxlen=30)
+_speech_gate: asyncio.Future | None = None
+_speech_gate_timer: asyncio.Task | None = None
+
+
+def open_speech_gate(failsafe_s: float = 35.0) -> None:
+    """Hold new TTS calls until ASR yields a command or the window expires."""
+    global _speech_gate, _speech_gate_timer
+    if _speech_gate is not None and not _speech_gate.done():
+        _speech_gate.set_result('reopened')
+    if _speech_gate_timer is not None:
+        _speech_gate_timer.cancel()
+
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+    _speech_gate = future
+
+    async def _failsafe():
+        global _speech_gate, _speech_gate_timer
+        try:
+            await asyncio.sleep(failsafe_s)
+        except asyncio.CancelledError:
+            return
+        if _speech_gate is future and not future.done():
+            future.set_result('failsafe')
+            _speech_gate = None
+            _speech_gate_timer = None
+
+    _speech_gate_timer = asyncio.create_task(_failsafe())
+
+
+def release_speech_gate(reason: str, clear: bool = False) -> bool:
+    """Release current TTS waiters; optionally forget the completed window."""
+    global _speech_gate, _speech_gate_timer
+    future = _speech_gate
+    if future is None:
+        return False
+    if not future.done():
+        future.set_result(reason)
+    if _speech_gate_timer is not None:
+        _speech_gate_timer.cancel()
+        _speech_gate_timer = None
+    if clear:
+        _speech_gate = None
+    return True
+
+
+def clear_speech_gate() -> None:
+    """Forget a completed window before processing the new user command."""
+    global _speech_gate, _speech_gate_timer
+    if _speech_gate_timer is not None:
+        _speech_gate_timer.cancel()
+        _speech_gate_timer = None
+    _speech_gate = None
+
+
+async def wait_speech_gate() -> str:
+    """Return the release reason, or ``inactive`` when no window is open."""
+    future = _speech_gate
+    if future is None:
+        return 'inactive'
+    return await asyncio.shield(future)
 
 
 def register(mcp_id: str, tool_name: str, x_hooks: dict):
