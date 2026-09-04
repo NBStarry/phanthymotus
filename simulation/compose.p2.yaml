@@ -1,0 +1,9 @@
+services:
+  sim-driver:
+    image: ${SIM_DRIVER_IMAGE:-phanthymotus-sim/sim-driver:p2-mujoco-amd64}
+    container_name: phanthymotus-sim-p2-g1-driver
+    environment:
+      SIMULATION_BACKEND: mujoco
+      SIM_DRIVER_DISPLAY_NAME: Simulated G1 (MuJoCo)
+      SIM_MUJOCO_MODEL: /work/resource/mujoco/g1/scene_29dof.xml
+      MUJOCO_GL: disable

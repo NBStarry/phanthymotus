@@ -1,0 +1,4 @@
+services:
+  gazebo-nav:
+    environment:
+      LOCALIZATION_MODE: amcl

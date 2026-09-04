@@ -1,0 +1,88 @@
+name: phanthymotus-sim-p0
+
+services:
+  agent-core:
+    image: ${CORE_IMAGE_OVERRIDE}
+    container_name: phanthymotus-sim-p0-agent-core
+    ports:
+      - "127.0.0.1:16678:15678"
+    environment:
+      DB_PATH: /work/resource/data.db
+      ROS_DOMAIN_ID: "83"
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      FASTDDS_BUILTIN_TRANSPORTS: DEFAULT
+      COMPOSE_DIR: /opt/phanthy-motus
+      CONTAINER_NAME: phanthymotus-sim-p0-agent-core
+      CONTAINER_NETWORK: phanthymotus-sim-p0-net
+      LOCAL_SERVICES_MANIFEST: /etc/phanthymotus/local-services/local-services.json
+      HTTP_PROXY: ${PHANTHY_SIM_RUNTIME_PROXY:-}
+      HTTPS_PROXY: ${PHANTHY_SIM_RUNTIME_PROXY:-}
+      http_proxy: ${PHANTHY_SIM_RUNTIME_PROXY:-}
+      https_proxy: ${PHANTHY_SIM_RUNTIME_PROXY:-}
+      NO_PROXY: localhost,127.0.0.1,agent-core,perception,sim-driver,gazebo-nav
+      no_proxy: localhost,127.0.0.1,agent-core,perception,sim-driver,gazebo-nav
+    volumes:
+      - core-resource:/work/resource
+      - core-compose:/opt/phanthy-motus
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./state:/etc/phanthymotus/local-services:ro
+    networks:
+      - sim-net
+    cpus: 2.0
+    mem_limit: 2g
+    pids_limit: 256
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  perception:
+    image: ${PERCEPTION_IMAGE_OVERRIDE}
+    container_name: phanthymotus-sim-p0-perception
+    depends_on:
+      - agent-core
+    ports:
+      - "127.0.0.1:16720:15720"
+      - "127.0.0.1:16721:15721"
+    environment:
+      AGENT_CORE_URL: https://agent-core:15678
+      MCP_ADVERTISE_URL: http://perception:15720/mcp
+      ROS_DOMAIN_ID: "83"
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      FASTDDS_BUILTIN_TRANSPORTS: DEFAULT
+    volumes:
+      - perception-models:/models
+    networks:
+      - sim-net
+    cpus: 4.0
+    mem_limit: 8g
+    pids_limit: 512
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  sim-net:
+    name: phanthymotus-sim-p0-net
+    driver: bridge
+
+volumes:
+  core-resource:
+    name: phanthymotus-sim-p0-core-resource
+  core-compose:
+    name: phanthymotus-sim-p0-core-compose
+  perception-models:
+    name: phanthymotus-sim-p0-perception-models

@@ -1,0 +1,10 @@
+services:
+  gazebo-nav:
+    environment:
+      ODOMETRY_MODE: deterministic_scale
+      ODOMETRY_LINEAR_SCALE: "1.04"
+      ODOMETRY_YAW_SCALE: "1.03"
+      RELOCALIZATION_VARIANCE_MAX: "0.25"
+      RELOCALIZATION_MIN_SECONDS: "2.0"
+      RELOCALIZATION_SCAN_SECONDS: "18.0"
+      RELOCALIZATION_SCAN_SPEED: "0.35"

@@ -1,0 +1,10 @@
+**/.git
+**/__pycache__
+**/*.pyc
+reports
+runtime-data
+src/unitree_mujoco/**
+!src/unitree_mujoco/LICENSE
+!src/unitree_mujoco/unitree_robots/
+!src/unitree_mujoco/unitree_robots/g1/
+!src/unitree_mujoco/unitree_robots/g1/**

@@ -1,0 +1,14 @@
+mcp_port: 15720
+ws_port: 15721
+
+# P0 只验证 Perception 容器、ROS2 运行时和 MCP 注册。
+# 业务插件和模型从 P1 起按卡片逐项启用并验收。
+plugins:
+  asr:
+    enabled: false
+  tts:
+    enabled: false
+  vop:
+    enabled: false
+  ocr:
+    enabled: false

@@ -1,0 +1,31 @@
+schema_version: "1.0"
+name: g1-orin-nx-16gb-application-budget
+evidence:
+  device: Shanghai G1
+  module: NVIDIA Orin NX Developer Kit
+  memory_bytes: 16135983104
+  cpu_count: 8
+  root_storage_bytes: 2015181778944
+  captured_at: "2026-08-24"
+
+policy:
+  description: Phanthy Motus 应用栈硬限制；MuJoCo/Gazebo 后端另行计量
+  total_application_cpus: 8
+  total_application_memory_bytes: 12884901888
+  os_reserved_memory_bytes: 3221225472
+  gpu_access: disabled
+  gpu_reason: A100 不能等效代表 Jetson Orin，P0 应用栈必须 CPU-only
+
+services:
+  agent_core:
+    cpus: 2
+    memory_bytes: 2147483648
+    pids_limit: 256
+  perception:
+    cpus: 4
+    memory_bytes: 8589934592
+    pids_limit: 512
+  simulated_g1_driver:
+    cpus: 2
+    memory_bytes: 2147483648
+    pids_limit: 256

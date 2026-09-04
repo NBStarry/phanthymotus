@@ -1,0 +1,103 @@
+schema_version: "1.0"
+locked_at: "2026-09-04"
+
+sources:
+  phanthymotus:
+    upstream: https://github.com/NBStarry/phanthymotus.git
+    remote_mirror: https://ghfast.top/https://github.com/NBStarry/phanthymotus.git
+    branch: sim
+    revision_policy: checked-out-clean-HEAD
+    upstream_base:
+      upstream: https://github.com/4paradigm/phanthymotus.git
+      branch: main
+      commit: d6b1fcc8449b10a54d182adabaf1c1133790fb41
+    simulation_build_platform: linux/amd64
+  phanthymotus_driver:
+    upstream: https://github.com/4paradigm/phanthymotus-driver.git
+    remote_mirror: https://ghfast.top/https://github.com/4paradigm/phanthymotus-driver.git
+    branch: main
+    commit: a9511ebc06db1276f66aa773aceb5b9e2f066279
+  unitree_mujoco:
+    upstream: https://github.com/unitreerobotics/unitree_mujoco.git
+    remote_mirror: https://ghfast.top/https://github.com/unitreerobotics/unitree_mujoco.git
+    branch: main
+    commit: ae6a8403e272733e9996ef59990880330496177f
+    license: BSD-3-Clause
+  unitree_sdk2:
+    upstream: https://github.com/unitreerobotics/unitree_sdk2.git
+    remote_mirror: https://ghfast.top/https://github.com/unitreerobotics/unitree_sdk2.git
+    branch: main
+    commit: 9754cd153af3da471b0fe5f3aa535e426fb11db3
+    license: BSD-3-Clause
+  unitree_rl_lab:
+    upstream: https://github.com/unitreerobotics/unitree_rl_lab.git
+    remote_mirror: https://ghfast.top/https://github.com/unitreerobotics/unitree_rl_lab.git
+    branch: main
+    commit: 4960b84732b0c2ec593dccbfe963fda1bcd7b1e3
+    license: BSD-3-Clause
+    integration_status: research-only-policy-probe-not-exposed
+
+research_artifacts:
+  unitree_rl_lab_g1_29dof_velocity_v0:
+    download_policy: remote-only
+    policy_onnx_sha256: 610c27e463a8f666aa50a06346678c00b4df3859f10b54bcc1f817c28251406f
+    deploy_yaml_sha256: 64b04c0596a7010f39f8ac6e9ec46dc750141063cdcf2d42c83ecc444e57bc63
+    license_file_sha256: ff28cacaef7b9919a0fb905136cf4ccffba5191522bf5d024c4339932c0edc28
+    source_archive_sha256: fbebf6ee3c9c6adbf554ccf497d8088563231703e84f54231137acef8bd8ef4b
+    probe_result: direct-policy-adapter-falls-before-official-elastic-band-and-fsm-parity
+  policy_probe_wheels:
+    download_policy: remote-only
+    source: https://nexus.4pd.io/repository/pypi-all/simple/
+    artifacts:
+      numpy-1.26.4-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl: ffa75af20b44f8dba823498024771d5ac50620e6915abac414251bd971b4529f
+      onnxruntime-1.18.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl: b7de69f5ced2a263531923fa68bbec52a56e793b802fcd81a03487b5e292bc3a
+
+platform:
+  architecture: amd64
+  ubuntu: "22.04"
+  ros: humble
+  ros_base_bootstrap_image: local/phanthy-motus/ros-base:humble-amd64-c124798-v3
+  ros_base_bootstrap_image_id: sha256:e21ebc229c42057682115596e6f390784946c7e8c1843e78ee94a8526e9cfe9d
+  ros_base_bootstrap_created_at: "2026-07-12T15:29:16.734814673+08:00"
+  gazebo_release: fortress
+  ignition_gazebo_major: 6
+  ros_gz_version: 0.244.25-1jammy.20260804.223901
+  navigation2_version: 1.1.20-1jammy.20260804.223401
+  nav2_bringup_version: 1.1.20-1jammy.20260804.225407
+  slam_toolbox_version: 2.6.10-1jammy.20260804.222728
+  mujoco_version: "3.3.6"
+  mujoco_tag_commit: eacad44a1a67afe520b263c9b15dab82f62a10aa
+
+python_dependencies:
+  pillow:
+    version: 11.3.0
+    license: HPND
+    source: https://nexus.4pd.io/repository/pypi-all/simple/
+    artifact: pillow-11.3.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+    sha256: 4445fa62e15936a028672fd48c4c11a66d641d2c05726c7ec1f8ba6a572036ae
+    download_policy: remote-only
+  mujoco_wheels:
+    download_policy: remote-only
+    source: https://pypi.org/simple/
+    artifacts:
+      absl_py-2.5.0-py3-none-any.whl: 0f17b89f2a4eaaedc4f28c622998aa690564b3012a396a4ffad0821007fe03ba
+      etils-1.13.0-py3-none-any.whl: d9cd4f40fbe77ad6613b7348a18132cc511237b6c076dbb89105c0b520a4c6bb
+      fsspec-2026.7.0-py3-none-any.whl: b57ddbafedfaef7018c1ecab32aa200a9d7ca26b77965f64e48b70061249d279
+      glfw-2.10.2-py2.py3-none-manylinux_2_28_x86_64.whl: b860de3ca0686182483f98f3ddd12e660acf25b3e0d521450ec9a3f999f72a65
+      importlib_resources-7.1.0-py3-none-any.whl: 1bd7b48b4088eddb2cd16382150bb515af0bd2c70128194392725f82ad2c96a1
+      mujoco-3.3.6-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl: 7640bc40229fce2611be76999b04cc6e8fadd315a40165ddeab48764ac5c2878
+      pyopengl-3.1.10-py3-none-any.whl: 794a943daced39300879e4e47bd94525280685f42dbb5a998d336cfff151d74f
+      typing_extensions-4.15.0-py3-none-any.whl: f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548
+      zipp-3.23.0-py3-none-any.whl: 071652d6115ed432f5ce1d34c336c0adfd6a884660d1e9712a256d3d3bd4b14e
+
+runtime:
+  compose_project: phanthymotus-sim-p0
+  ros_domain_id: 83
+  core_host_port: 16678
+  perception_mcp_host_port: 16720
+  perception_ws_host_port: 16721
+  simulated_g1_mcp_host_port: 16730
+  gazebo_navigation_mcp_host_port: 16731
+  p2_simulation_backend: mujoco_g1_29dof
+  p2_driver_image: phanthymotus-sim/sim-driver:p2-03b13d27e9f0-mujoco-amd64
+  p3_navigation_image: phanthymotus-sim/gazebo-nav:p3-646971f08247-fortress-nav2-amd64

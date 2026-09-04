@@ -1,0 +1,24 @@
+services:
+  gazebo-nav:
+    image: ${GAZEBO_NAV_IMAGE:-phanthymotus-sim/gazebo-nav:p3-fortress-nav2-amd64}
+    container_name: phanthymotus-sim-p3-gazebo-nav
+    depends_on: [agent-core]
+    ports: ["127.0.0.1:16731:15731"]
+    environment:
+      AGENT_CORE_URL: https://agent-core:15678
+      MCP_ADVERTISE_URL: http://gazebo-nav:15731/mcp
+      ROS_DOMAIN_ID: "83"
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      FASTDDS_BUILTIN_TRANSPORTS: DEFAULT
+      IGN_PARTITION: phanthymotus_sim_p3
+      LIBGL_ALWAYS_SOFTWARE: "1"
+    networks: [sim-net]
+    cpus: 4.0
+    mem_limit: 6g
+    pids_limit: 768
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    logging:
+      driver: local
+      options: {max-size: 10m, max-file: "3"}

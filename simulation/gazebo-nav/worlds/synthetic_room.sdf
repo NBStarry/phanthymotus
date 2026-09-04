@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<sdf version="1.8">
+  <world name="synthetic_room">
+    <physics name="1ms" type="ignored"><max_step_size>0.001</max_step_size><real_time_factor>1.0</real_time_factor></physics>
+    <plugin filename="libignition-gazebo-physics-system.so" name="ignition::gazebo::systems::Physics"/>
+    <plugin filename="libignition-gazebo-user-commands-system.so" name="ignition::gazebo::systems::UserCommands"/>
+    <plugin filename="libignition-gazebo-scene-broadcaster-system.so" name="ignition::gazebo::systems::SceneBroadcaster"/>
+    <plugin filename="libignition-gazebo-sensors-system.so" name="ignition::gazebo::systems::Sensors"><render_engine>ogre2</render_engine></plugin>
+    <light type="directional" name="sun"><pose>0 0 10 0 0 0</pose><diffuse>0.8 0.8 0.8 1</diffuse><direction>-0.5 0.1 -0.9</direction></light>
+
+    <model name="floor"><static>true</static><link name="floor_link"><collision name="collision"><geometry><box><size>10 8 0.1</size></box></geometry></collision><visual name="visual"><geometry><box><size>10 8 0.1</size></box></geometry><material><ambient>0.35 0.35 0.35 1</ambient></material></visual></link></model>
+    <model name="walls"><static>true</static><link name="walls_link">
+      <collision name="north"><pose>0 3.9 0.5 0 0 0</pose><geometry><box><size>10 0.2 1</size></box></geometry></collision>
+      <collision name="south"><pose>0 -3.9 0.5 0 0 0</pose><geometry><box><size>10 0.2 1</size></box></geometry></collision>
+      <collision name="east"><pose>4.9 0 0.5 0 0 0</pose><geometry><box><size>0.2 8 1</size></box></geometry></collision>
+      <collision name="west"><pose>-4.9 0 0.5 0 0 0</pose><geometry><box><size>0.2 8 1</size></box></geometry></collision>
+      <visual name="north_v"><pose>0 3.9 0.5 0 0 0</pose><geometry><box><size>10 0.2 1</size></box></geometry></visual>
+      <visual name="south_v"><pose>0 -3.9 0.5 0 0 0</pose><geometry><box><size>10 0.2 1</size></box></geometry></visual>
+      <visual name="east_v"><pose>4.9 0 0.5 0 0 0</pose><geometry><box><size>0.2 8 1</size></box></geometry></visual>
+      <visual name="west_v"><pose>-4.9 0 0.5 0 0 0</pose><geometry><box><size>0.2 8 1</size></box></geometry></visual>
+    </link></model>
+    <model name="obstacle_a"><static>true</static><pose>1.5 1.0 0.5 0 0 0</pose><link name="link"><collision name="collision"><geometry><box><size>0.6 2.0 1</size></box></geometry></collision><visual name="visual"><geometry><box><size>0.6 2.0 1</size></box></geometry><material><ambient>0.8 0.25 0.15 1</ambient></material></visual></link></model>
+    <model name="obstacle_b"><static>true</static><pose>-1.5 -0.5 0.5 0 0 0</pose><link name="link"><collision name="collision"><geometry><box><size>0.8 0.8 1</size></box></geometry></collision><visual name="visual"><geometry><box><size>0.8 0.8 1</size></box></geometry><material><ambient>0.15 0.45 0.85 1</ambient></material></visual></link></model>
+
+    <model name="planar_base"><pose>0 0 0.15 0 0 0</pose>
+      <link name="base_link"><inertial><mass>12</mass><inertia><ixx>0.25</ixx><iyy>0.3</iyy><izz>0.35</izz></inertia></inertial><collision name="collision"><geometry><box><size>0.45 0.34 0.18</size></box></geometry></collision><visual name="visual"><geometry><box><size>0.45 0.34 0.18</size></box></geometry><material><ambient>0.1 0.7 0.35 1</ambient></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><topic>/phanthymotus_sim_nav/gz_scan</topic><update_rate>10</update_rate><pose>0.12 0 0.18 0 0 0</pose><lidar><scan><horizontal><samples>360</samples><resolution>1</resolution><min_angle>-3.14159265</min_angle><max_angle>3.14159265</max_angle></horizontal></scan><range><min>0.12</min><max>12.0</max><resolution>0.02</resolution></range></lidar></sensor>
+      </link>
+      <link name="left_wheel"><pose>0 0.20 -0.03 -1.5707963 0 0</pose><inertial><mass>0.5</mass><inertia><ixx>0.002</ixx><iyy>0.002</iyy><izz>0.002</izz></inertia></inertial><collision name="collision"><geometry><cylinder><radius>0.09</radius><length>0.04</length></cylinder></geometry></collision><visual name="visual"><geometry><cylinder><radius>0.09</radius><length>0.04</length></cylinder></geometry></visual></link>
+      <link name="right_wheel"><pose>0 -0.20 -0.03 -1.5707963 0 0</pose><inertial><mass>0.5</mass><inertia><ixx>0.002</ixx><iyy>0.002</iyy><izz>0.002</izz></inertia></inertial><collision name="collision"><geometry><cylinder><radius>0.09</radius><length>0.04</length></cylinder></geometry></collision><visual name="visual"><geometry><cylinder><radius>0.09</radius><length>0.04</length></cylinder></geometry></visual></link>
+      <joint name="left_wheel_joint" type="revolute"><parent>base_link</parent><child>left_wheel</child><axis><xyz>0 0 1</xyz></axis></joint>
+      <joint name="right_wheel_joint" type="revolute"><parent>base_link</parent><child>right_wheel</child><axis><xyz>0 0 1</xyz></axis></joint>
+      <!-- Fortress 6.18 wheel axes are locked by the live cmd_vel-to-odom sign acceptance. -->
+      <plugin filename="libignition-gazebo-diff-drive-system.so" name="ignition::gazebo::systems::DiffDrive"><left_joint>left_wheel_joint</left_joint><right_joint>right_wheel_joint</right_joint><wheel_separation>0.4</wheel_separation><wheel_radius>0.09</wheel_radius><topic>/phanthymotus_sim_nav/gz_cmd_vel</topic><odom_topic>/phanthymotus_sim_nav/gz_odom</odom_topic><tf_topic>/phanthymotus_sim_nav/gz_tf</tf_topic><odom_publish_frequency>30</odom_publish_frequency></plugin>
+    </model>
+  </world>
+</sdf>

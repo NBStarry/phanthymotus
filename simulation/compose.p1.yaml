@@ -1,0 +1,32 @@
+services:
+  sim-driver:
+    image: ${SIM_DRIVER_IMAGE:-phanthymotus-sim/sim-driver:p1-amd64}
+    container_name: phanthymotus-sim-p1-g1-driver
+    depends_on:
+      - agent-core
+    ports:
+      - "127.0.0.1:16730:15730"
+    environment:
+      AGENT_CORE_URL: https://agent-core:15678
+      MCP_ADVERTISE_URL: http://sim-driver:15730/mcp
+      MCP_PORT: "15730"
+      SIM_NAMESPACE: phanthymotus_sim_g1
+      SIM_SEED: "7"
+      ROS_DOMAIN_ID: "83"
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      FASTDDS_BUILTIN_TRANSPORTS: DEFAULT
+    networks:
+      - sim-net
+    cpus: 2.0
+    mem_limit: 2g
+    pids_limit: 256
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"

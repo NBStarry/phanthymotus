@@ -11,15 +11,17 @@ Perception 中方便虚拟环境调试的源码修改，不以合并进
 - Core / Perception 中通用的仿真调试和可观测性改进；
 - 默认关闭、由环境变量显式开启的仿真辅助功能；
 - 与行为同步的单元、契约和 WebUI 回归测试。
+- `simulation/` 下的 Sim Driver、MuJoCo / Gazebo backend、Compose、地图、版本锁和验收脚本。
 
 以下内容不放入本分支：
 
-- Sim Driver、MuJoCo / Gazebo backend、地图、bag、模型和其他大文件；
+- bag、模型、wheel、镜像归档和其他大文件；
 - WLCB 私网地址、代理地址、token、密钥或设备标识；
 - 绕过生命周期、停止、失联或安全检查的调试后门。
 
-仿真 Driver、Compose、资源限制、版本锁和远端验收脚本继续由独立的
-`phanthymotus-sim` 项目管理。该项目必须锁定本分支的精确 commit，不能只锁分支名。
+仿真代码只在本仓 `simulation/` 维护，不再建立独立 `phanthymotus-sim` Git 仓库。
+远端部署从当前干净的 `sim` 分支 HEAD 构建，镜像标签记录其精确 commit；大文件只在
+远端下载到 `simulation/artifacts/` 或 Docker volume。
 
 ## 同步上游
 
@@ -32,7 +34,7 @@ git merge --no-ff upstream/main
 ```
 
 每次同步后都要重新运行定向测试、P0 和当前最高阶段仿真验收，再更新
-`phanthymotus-sim/versions.lock.yaml` 中的上游基线和本分支 commit。
+`simulation/versions.lock.yaml` 中的上游基线。
 
 ## 当前本地修改
 
