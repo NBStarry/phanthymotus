@@ -19,7 +19,6 @@ test('the detail panel forwards a real MCP id to the renderer', () => {
   assert.match(detailPanel, /_renderer\.mount\(body, mcpId \|\| 'detail'\)/);
 });
 
-test('both canvas topic-detail entry points pass their card MCP id', () => {
-  const calls = canvas.match(/showTopicDetail\(topics\[0\]\.topic, topics\[0\]\.format \|\| '', mcpId\)/g) || [];
-  assert.equal(calls.length, 2);
+test('the shared canvas topic-detail helper passes its card MCP id', () => {
+  assert.match(canvas, /showTopicDetail\(candidate\.topic, candidate\.format \|\| '', mcpId\)/);
 });

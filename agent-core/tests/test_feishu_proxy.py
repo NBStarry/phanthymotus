@@ -1,4 +1,4 @@
-"""Feishu REST calls must honor the container proxy environment.
+"""Feishu connections must honor the container proxy environment.
 
 Run: cd agent-core && python3 -m pytest tests/test_feishu_proxy.py -q
 """
@@ -89,6 +89,18 @@ class FeishuProxyTest(unittest.TestCase):
         self.assertTrue(seen)
         self.assertIs(seen[0]['trust_env'], True)
 
+    def test_websocket_sdk_proxy_patch_is_idempotent(self):
+        import lark_oapi.ws.client as ws_mod
+
+        with mock.patch.object(
+            ws_mod, '_ws_connect_kwargs', return_value={'proxy': None, 'ping_interval': 30}
+        ):
+            feishu._enable_sdk_env_proxy(ws_mod)
+            patched = ws_mod._ws_connect_kwargs
+            feishu._enable_sdk_env_proxy(ws_mod)
+
+            self.assertIs(ws_mod._ws_connect_kwargs, patched)
+            self.assertEqual(patched(), {'ping_interval': 30})
 
 if __name__ == '__main__':
     unittest.main()
