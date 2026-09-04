@@ -363,7 +363,8 @@ assert any(x.get('name') == 'Perception Stack' and x.get('url') == 'http://perce
 assert perception['result']['serverInfo']['name'] == 'perception-bundle', perception
 assert "showTopicDetail(topicPath, format, mcpId = '')" in detail_panel
 assert "_renderer.mount(body, mcpId || 'detail')" in detail_panel
-assert canvas.count("topics[0].format || '', mcpId") == 2
+assert canvas.count("_openTopicDetailFor(el, mcpId, topicOut)") == 2
+assert "showTopicDetail(candidate.topic, candidate.format || '', mcpId)" in canvas
 assert '本地仿真' in deploy_panel
 print('Core WebUI/API + Perception MCP registration PASS')
 PY
