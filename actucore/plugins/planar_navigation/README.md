@@ -136,6 +136,7 @@ docker run --rm --network none \
 ~~~
 
 镜像基于标准 ROS Humble Jammy，APT 使用国内 HTTPS 镜像并保留签名校验。
+测试会直接执行 Dockerfile 的 Ubuntu 换源表达式，覆盖 ARM64 和 AMD64 源地址。
 锁定 SLAM Toolbox 2.6.10 与 Nav2 1.1.20 的上游版本；发行包重建后缀允许变化，
 实际安装清单留在 /work/dependency-versions.txt。当前基础镜像是 tag，
 还不能宣称完全逐字节可复现；发布前记录验证镜像的 RepoDigest。

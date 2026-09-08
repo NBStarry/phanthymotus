@@ -6,6 +6,7 @@ import math
 import os
 from pathlib import Path
 import struct
+import subprocess
 import sys
 import tempfile
 import threading
@@ -44,6 +45,20 @@ class PlanarTests(unittest.TestCase):
         self.assertFalse(fresh(20, 9, 20, 10, 0.5))
         self.assertTrue(fresh(19.9, 9.9, 20, 10, 0.5))
         self.assertFalse(fresh(21, 9.9, 20, 10, 0.5))
+
+    def test_dockerfile_mirror_expression_runs(self):
+        dockerfile = Path(__file__).resolve().parents[1] / "Dockerfile.planar"
+        expression = dockerfile.read_text().split('sed -E -i "', 1)[1].split('"', 1)[0]
+        expression = expression.replace("${APT_MIRROR}", "mirrors.tuna.tsinghua.edu.cn")
+        for host, path in (("ports.ubuntu.com", "ubuntu-ports"),
+                           ("mirrors.tencentyun.com", "ubuntu-ports"),
+                           ("archive.ubuntu.com", "ubuntu"),
+                           ("security.ubuntu.com", "ubuntu")):
+            result = subprocess.run(["sed", "-E", expression],
+                                    input=f"http://{host}/{path} jammy main\n",
+                                    capture_output=True, text=True, check=True)
+            self.assertEqual(result.stdout,
+                             f"https://mirrors.tuna.tsinghua.edu.cn/{path} jammy main\n")
 
     def test_proposal_stop_and_recovery(self):
         out, clock = [], [10.0]

@@ -12,7 +12,7 @@ RUN set -eu; \
     for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do \
       [ -f "$f" ] || continue; \
       if [ -n "${APT_MIRROR}" ]; then \
-        sed -E -i "s|https?://(ports.ubuntu.com|mirrors.tencentyun.com)/ubuntu-ports|https://${APT_MIRROR}/ubuntu-ports|g; s|https?://(archive.ubuntu.com|security.ubuntu.com)/ubuntu|https://${APT_MIRROR}/ubuntu|g" "$f"; \
+        sed -E -i "s#https?://(ports[.]ubuntu[.]com|mirrors[.]tencentyun[.]com)/ubuntu-ports#https://${APT_MIRROR}/ubuntu-ports#g; s#https?://(archive[.]ubuntu[.]com|security[.]ubuntu[.]com)/ubuntu#https://${APT_MIRROR}/ubuntu#g" "$f"; \
       fi; \
       sed -E -i "s|https?://packages.ros.org/ros2/ubuntu|${ROS_MIRROR}|g" "$f"; \
       if [[ "$f" == *.list ]]; then \
@@ -37,6 +37,7 @@ RUN set -eu; \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /work
 COPY actucore/main.py /work/main.py
+COPY actucore/Dockerfile.planar /work/Dockerfile.planar
 COPY perception/utils/logsafe.py /work/logsafe.py
 COPY actucore/plugins/ /work/plugins/
 COPY actucore/plugins/planar_navigation/config.yaml /work/config.yaml
