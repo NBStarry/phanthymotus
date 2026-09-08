@@ -49,11 +49,16 @@ class PlanarTests(unittest.TestCase):
     def test_standard_image_and_mirror_commands(self):
         root = Path(__file__).resolve().parents[1]
         text = (root / "Dockerfile.jetson").read_text()
+        base = (root / "Dockerfile.planar-navigation-base").read_text()
         self.assertIn("FROM bj-warehouse.tencentcloudcr.com/phanthy-motus/jetson-base:jp${JP_VERSION}-torch", text)
         self.assertNotIn("ros-humble-", text)
         self.assertNotIn("trusted=yes", text)
         self.assertIn("Dir::Etc::sourceparts=-", text)
         self.assertIn("COPY actucore/config.yaml /work/config.yaml", text)
+        self.assertIn("FROM ${ACTUCORE_PARENT_IMAGE} AS planar_navigation_builder", base)
+        self.assertIn("FROM ${ACTUCORE_PARENT_IMAGE} AS planar_navigation_runtime", base)
+        self.assertNotIn("COPY actucore/main.py", base)
+        self.assertIn("test ! -e /opt/actucore_navigation_ws/src", base)
         command = "for suite in " + text.split("for suite in ", 1)[1].split(" > /tmp/actucore-ubuntu.list", 1)[0]
         command = command.replace("\\\n", "")
         for codename in ("focal", "jammy"):

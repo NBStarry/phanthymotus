@@ -6,6 +6,7 @@
 # Usage:
 #   ./build_actucore.sh                          # JetPack 5.11（默认），交互选源
 #   ./build_actucore.sh --jp-version 6.1         # JetPack 6.1
+#   ./build_actucore.sh --base --jp-version 6.1  # 二维导航公共 base
 #   ./build_actucore.sh --mirror tuna
 #   ./build_actucore.sh --jp-version 6.1 --mirror tuna --local
 set -euo pipefail
@@ -25,9 +26,11 @@ eval "$(parse_mirror_arg "$@")"
 # ── 解析参数 ─────────────────────────────────────────────────────────
 JP_VERSION="5.11"
 LOCAL_ONLY=false
+BUILD_BASE=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --local) LOCAL_ONLY=true; shift ;;
+        --base) BUILD_BASE=true; shift ;;
         --jp-version) JP_VERSION="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
@@ -52,8 +55,6 @@ if ${LOCAL_ONLY}; then
 fi
 COMMIT="$(git -C "${REPO_ROOT}" rev-parse --short=7 HEAD)"
 
-# ── 所有卡片统一打入框架 Jetson 镜像 ─────────────────────────────────
-DOCKERFILE="${REPO_ROOT}/actucore/Dockerfile.jetson"
 BUILD_CONTEXT="${REPO_ROOT}"
 TAG="release.${DATE}.${COMMIT}-jetson-jp${JP_VERSION}"
 
@@ -63,13 +64,25 @@ jetpack_vars "${JP_VERSION}" || exit 1
 BUILD_ARGS=("JP_VERSION=${JP_ARG}" "BUILD_JOBS=${BUILD_JOBS:-2}" "GIT_MIRROR_PREFIX=${GIT_MIRROR_PREFIX:-}")
 CARDS_JSON='["PlanarSemanticNavigation"]'
 
+if ${BUILD_BASE}; then
+    if ! ${IS_ARM64}; then
+        echo "ERROR=build the planar navigation base on native ARM64" >&2
+        exit 2
+    fi
+    DOCKERFILE="${REPO_ROOT}/actucore/Dockerfile.planar-navigation-base"
+    IMAGE_NAME="actucore-planar-navigation-base"
+else
+    DOCKERFILE="${REPO_ROOT}/actucore/Dockerfile.jetson"
+    IMAGE_NAME="actucore"
+fi
+
 # Dockerfile.jetson 基于 L4T base image —— 只有 arm64
 CPU_ARCH="arm64"
 
-FULL_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/actucore:${TAG}"
+FULL_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${TAG}"
 
 echo "============================================"
-echo "Building actucore image (Jetson)"
+echo "Building ${IMAGE_NAME} image (Jetson)"
 echo "Image  : ${FULL_IMAGE}"
 echo "Arch   : ${ARCH} (native=${IS_ARM64})"
 echo "Runs on: ${ACC_ARCH} / ${CPU_ARCH}"
@@ -96,7 +109,7 @@ else
 fi
 
 # ── 注册到 resource-center（可选）────────────────────────────────────────────
-if ${PUSH_ENABLED} && [ -n "${RESOURCE_CENTER_API_KEY:-}" ]; then
+if ! ${BUILD_BASE} && ${PUSH_ENABLED} && [ -n "${RESOURCE_CENTER_API_KEY:-}" ]; then
     # Ask only if there is a terminal to ask on; otherwise sync (the key being
     # set is the opt-in). Test by opening /dev/tty, not with `[ -e ]`: the device
     # node exists in any container, but opening it without a controlling

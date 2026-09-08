@@ -1,0 +1,72 @@
+# Reusable JetPack 6.1 base for the standard ActuCore image.
+# Build context: repository root.
+ARG PYPI_MIRROR=https://pypi.tuna.tsinghua.edu.cn/simple/
+ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
+ARG JP_VERSION=61
+ARG ACTUCORE_PARENT_IMAGE=bj-warehouse.tencentcloudcr.com/phanthy-motus/jetson-base:jp${JP_VERSION}-torch
+
+FROM ${ACTUCORE_PARENT_IMAGE} AS planar_navigation_builder
+ARG PYPI_MIRROR APT_MIRROR
+ARG BUILD_JOBS=2
+ARG GIT_MIRROR_PREFIX=
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN set -e; source /etc/os-release; \
+    for suite in "${VERSION_CODENAME}" "${VERSION_CODENAME}-updates" "${VERSION_CODENAME}-security"; do \
+      printf 'deb https://%s/ubuntu-ports %s main restricted universe multiverse\n' \
+        "${APT_MIRROR:-ports.ubuntu.com}" "$suite"; \
+    done > /tmp/actucore-ubuntu.list; \
+    apt_args=(-o Dir::Etc::sourcelist=/tmp/actucore-ubuntu.list -o Dir::Etc::sourceparts=- \
+              -o APT::Update::Error-Mode=any -o Acquire::Retries=3); \
+    apt-get "${apt_args[@]}" update && \
+    apt-get "${apt_args[@]}" install -y --no-install-recommends \
+      build-essential cmake git pkg-config libboost-program-options-dev libeigen3-dev \
+      libceres-dev libsuitesparse-dev liblapack-dev libtbb-dev qtbase5-dev \
+      libgraphicsmagick++1-dev python3-pil && \
+    rm -rf /var/lib/apt/lists/* && rm /tmp/actucore-ubuntu.list
+
+RUN pip3 install --no-cache-dir -i "${PYPI_MIRROR}" colcon-common-extensions "empy<4"
+COPY actucore/plugins/planar_navigation/sources.lock actucore/plugins/planar_navigation/build-dependencies.sh /tmp/planar-build/
+RUN bash /tmp/planar-build/build-dependencies.sh
+
+FROM ${ACTUCORE_PARENT_IMAGE} AS planar_navigation_runtime
+ARG APT_MIRROR
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN set -e; source /etc/os-release; \
+    for suite in "${VERSION_CODENAME}" "${VERSION_CODENAME}-updates" "${VERSION_CODENAME}-security"; do \
+      printf 'deb https://%s/ubuntu-ports %s main restricted universe multiverse\n' \
+        "${APT_MIRROR:-ports.ubuntu.com}" "$suite"; \
+    done > /tmp/actucore-ubuntu.list; \
+    apt_args=(-o Dir::Etc::sourcelist=/tmp/actucore-ubuntu.list -o Dir::Etc::sourceparts=- \
+              -o APT::Update::Error-Mode=any -o Acquire::Retries=3); \
+    apt-get "${apt_args[@]}" update && \
+    apt-get "${apt_args[@]}" install -y --no-install-recommends \
+      libceres2 libgraphicsmagick++-q16-12 python3-pil && \
+    rm -rf /var/lib/apt/lists/* && rm /tmp/actucore-ubuntu.list
+
+COPY --from=planar_navigation_builder /opt/actucore_navigation_ws/install/ /opt/actucore_navigation_ws/install/
+COPY --from=planar_navigation_builder /opt/actucore_navigation_ws/sources.lock /opt/actucore_navigation_ws/sources.lock
+COPY --from=planar_navigation_builder /opt/actucore_navigation_ws/dependency-versions.txt /opt/actucore_navigation_ws/dependency-versions.txt
+
+RUN source /opt/actucore_navigation_ws/install/setup.bash && \
+    for entry in \
+      slam_toolbox:async_slam_toolbox_node \
+      nav2_amcl:amcl \
+      nav2_map_server:map_server \
+      nav2_planner:planner_server \
+      nav2_controller:controller_server \
+      nav2_bt_navigator:bt_navigator \
+      nav2_lifecycle_manager:lifecycle_manager; do \
+        package="${entry%%:*}"; executable="${entry##*:}"; \
+        ros2 pkg executables "${package}" | grep -Fqx "${package} ${executable}"; \
+        binary="$(ros2 pkg prefix "${package}")/lib/${package}/${executable}"; \
+        ! ldd "${binary}" | grep -Fq 'not found'; \
+    done && \
+    python3 -c 'from nav2_msgs.action import NavigateToPose; from slam_toolbox.srv import SaveMap' && \
+    test ! -e /opt/actucore_navigation_ws/src && \
+    test ! -e /opt/actucore_navigation_ws/build && \
+    test ! -e /opt/actucore_navigation_ws/log
+
+LABEL org.opencontainers.image.title="Phanthy Motus ActuCore Planar Navigation Base" \
+      org.opencontainers.image.description="Runtime base with source-locked Nav2 and SLAM Toolbox for the shared ActuCore image"

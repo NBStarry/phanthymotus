@@ -125,6 +125,7 @@ map_revision_mismatch。首版不支持边建图边记录地点，避免回环�
 ~~~bash
 # 仓库根目录：只构建本地，不登录、不推送或注册。
 bash deploy/build_actucore.sh --jp-version 6.1 --mirror tuna --local
+bash deploy/build_actucore.sh --base --jp-version 6.1 --mirror tuna --local
 
 # 无 ROS 的本地测试，需 Pillow、PyYAML；测试目录不访问真实配置数据库。
 python3 -m unittest discover -s actucore/tests -p test_planar_navigation.py -v
@@ -135,7 +136,9 @@ docker run --rm --network none \
   <IMAGE> bash -c 'source /ros_ws/install/setup.bash && python3 /work/tests/planar_ros_smoke.py'
 ~~~
 
-卡片随标准 ActuCore 镜像构建，继承框架 `jetson-base:jp${JP_VERSION}-torch`，
+卡片随标准 ActuCore 镜像构建；JP6.1 的锁定 Nav2/SLAM 运行依赖先构建为
+`actucore-planar-navigation-base`，再由统一 ActuCore 镜像消费。base 不是可部署
+卡片，不复制应用代码，也不注册 Resource Center。它继承框架 `jetson-base:jp${JP_VERSION}-torch`，
 保留 CUDA torch、原有卡片、配置和部署入口；不再提供独立 CPU/planar 镜像。
 二维算法本身不用 GPU，不代表整个共享镜像没有 GPU 依赖。新增算法只在启动卡片时运行。
 APT 只读取临时生成的国内 HTTPS Ubuntu 二进制源并保留签名校验，不读取基础镜像的
