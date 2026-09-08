@@ -1,16 +1,14 @@
 # ── Jetson GPU variant ──────────────────────────────────────────────
 # Base: jetson-base:jp511-torch (torch 2.0 + torchvision 0.15 with CUDA)
 #
-# ActuCore ships no cards yet, so this variant is deliberately thin — it
-# exists so the first GPU-bound execution model (VLA policy, grasp net) has a
-# base to land on without also needing a new base image. It keeps the CUDA
-# torch from the base plus the ROS2 plumbing, and nothing else.
+# All cards share this image and the framework's CUDA torch / source ROS base.
+# Planar navigation adds an overlay; it does not install a second ROS distro.
 #
 # Build context: repo root (phanthymotus/) so we can access both
 # actucore/ and deploy/ros-base/audio_msgs/
 #
 # Usage:
-#   ./deploy/build_actucore.sh --variant jetson --mirror tuna
+#   ./deploy/build_actucore.sh --mirror tuna
 # ────────────────────────────────────────────────────────────────────
 
 ARG PYPI_MIRROR=https://pypi.tuna.tsinghua.edu.cn/simple/
@@ -18,27 +16,36 @@ ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
 ARG JP_VERSION=511
 FROM bj-warehouse.tencentcloudcr.com/phanthy-motus/jetson-base:jp${JP_VERSION}-torch
 ARG PYPI_MIRROR APT_MIRROR
+ARG BUILD_JOBS=2
+ARG GIT_MIRROR_PREFIX=
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# ── APT mirror (conditional) ─────────────────────────────────────
-RUN if [ -n "${APT_MIRROR}" ]; then \
-        sed -i "s/archive.ubuntu.com/${APT_MIRROR}/g; s/ports.ubuntu.com/${APT_MIRROR}/g" /etc/apt/sources.list; \
-    fi
-
-# ── Switch ROS2 to TUNA mirror + skip expired key (if sources exist) ──
-RUN if ls /etc/apt/sources.list.d/*.list 1>/dev/null 2>&1; then \
-        sed -i 's|http://packages.ros.org/ros2/ubuntu|https://mirrors.tuna.tsinghua.edu.cn/ros2/ubuntu|g' /etc/apt/sources.list.d/*.list && \
-        sed -i 's|deb \[|deb [trusted=yes |g; s|deb http|deb [trusted=yes] http|g' /etc/apt/sources.list.d/ros2*.list; \
-    fi
+# Use only signed Ubuntu binary indexes for these system dependencies. Do not
+# use inherited ROS apt sources: Humble is already source-built in this base.
+RUN set -e; source /etc/os-release; \
+    for suite in "${VERSION_CODENAME}" "${VERSION_CODENAME}-updates" "${VERSION_CODENAME}-security"; do \
+      printf 'deb https://%s/ubuntu-ports %s main restricted universe multiverse\n' \
+        "${APT_MIRROR:-ports.ubuntu.com}" "$suite"; \
+    done > /tmp/actucore-ubuntu.list; \
+    apt_args=(-o Dir::Etc::sourcelist=/tmp/actucore-ubuntu.list -o Dir::Etc::sourceparts=- \
+              -o APT::Update::Error-Mode=any -o Acquire::Retries=3); \
+    apt-get "${apt_args[@]}" update && \
+    apt-get "${apt_args[@]}" install -y --no-install-recommends \
+      build-essential cmake git pkg-config libboost-program-options-dev libeigen3-dev \
+      libceres-dev libsuitesparse-dev liblapack-dev libtbb-dev qtbase5-dev \
+      libgraphicsmagick++1-dev python3-pil && \
+    rm -rf /var/lib/apt/lists/* && rm /tmp/actucore-ubuntu.list
 
 RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} colcon-common-extensions && \
     pip3 install --no-cache-dir -i ${PYPI_MIRROR} "empy<4"
 
+COPY actucore/plugins/planar_navigation/sources.lock actucore/plugins/planar_navigation/build-dependencies.sh /tmp/planar-build/
+RUN bash /tmp/planar-build/build-dependencies.sh
+
 # ── audio_msgs ROS2 package (Humble already in base) ──────────────
-# Built here so both variants expose the same ROS message set as ros-base does
-# — otherwise a card would work on CPU and fail to import on Jetson.
 COPY deploy/ros-base/audio_msgs/ /ros_ws/src/audio_msgs/
 RUN cd /ros_ws && \
-    . /opt/ros/humble/install/setup.bash && \
+    source /opt/actucore_navigation_ws/install/setup.bash && \
     colcon build --packages-select audio_msgs --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 # ── Python deps ────────────────────────────────────────────────────
@@ -57,16 +64,23 @@ COPY perception/utils/logsafe.py /work/logsafe.py
 # Agent Core reads /deploy/service.yml out of the image to merge the compose
 # fragment — dropping this COPY silently falls back to the legacy docker-run path.
 COPY actucore/deploy/     /deploy/
+COPY actucore/tests/      /work/tests/
+COPY actucore/Dockerfile.jetson /work/Dockerfile.jetson
+
+RUN source /ros_ws/install/setup.bash && \
+    python3 -m unittest discover -s /work/tests -p test_planar_navigation.py -v && \
+    python3 -c 'from plugins.planar_navigation.runtime import Runtime; from nav2_msgs.action import NavigateToPose; from slam_toolbox.srv import SaveMap'
 
 EXPOSE 15730
 
 # 确保 ROS2 Python 包始终在 PYTHONPATH 中（不依赖 source setup.bash）
-RUN find /ros_ws/install -name "site-packages" -type d > /usr/local/lib/python${PYTHON_VERSION-3.8}/dist-packages/ros_ws.pth && \
-    find /opt/ros/humble/install -name "site-packages" -type d >> /usr/local/lib/python${PYTHON_VERSION-3.8}/dist-packages/ros_ws.pth
+RUN python_site="$(python3 -c 'import site; print(site.getsitepackages()[0])')" && \
+    find /ros_ws/install /opt/actucore_navigation_ws/install /opt/ros/humble/install \
+      -name "site-packages" -type d > "${python_site}/ros_ws.pth"
 
 # ROS2 shared libraries（audio_msgs .so 等）
-ENV LD_LIBRARY_PATH="/ros_ws/install/audio_msgs/lib:/opt/ros/humble/install/lib:${LD_LIBRARY_PATH}"
-ENV AMENT_PREFIX_PATH="/ros_ws/install/audio_msgs:/opt/ros/humble/install"
+ENV LD_LIBRARY_PATH="/ros_ws/install/audio_msgs/lib:/opt/actucore_navigation_ws/install/lib:/opt/ros/humble/install/lib:${LD_LIBRARY_PATH}"
+ENV AMENT_PREFIX_PATH="/ros_ws/install/audio_msgs:/opt/actucore_navigation_ws/install:/opt/ros/humble/install"
 
 ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ENV ROS_DOMAIN_ID=42
@@ -74,5 +88,6 @@ ENV ROS_DOMAIN_ID=42
 CMD ["/bin/bash", "-c", \
     "export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1 && \
      source /opt/ros/humble/install/setup.bash && \
+     source /opt/actucore_navigation_ws/install/setup.bash && \
      source /ros_ws/install/setup.bash && \
      python3 /work/main.py"]

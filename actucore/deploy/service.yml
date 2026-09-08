@@ -8,6 +8,7 @@ actucore:
   volumes:
     - /dev:/dev
     - /opt/embodied/models:/models
+    - /opt/phanthy-motus/data/planar_navigation:/data/planar_navigation
     # DDS profile 只读挂载。必须与其它 DDS 容器加载同一份，
     # 否则本容器会与本机其余部分失联。
     - /opt/phanthy-motus/dds-local.xml:/opt/phanthy-motus/dds-local.xml:ro

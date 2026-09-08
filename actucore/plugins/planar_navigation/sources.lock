@@ -1,0 +1,9 @@
+# Directory HTTPS-repository full-commit-SHA
+navigation2 https://github.com/ros-navigation/navigation2.git a097086719c88f781aa59788eca29ac6ca5e56db
+slam_toolbox https://github.com/SteveMacenski/slam_toolbox.git 8293d21fe5c816d0405e0cc1f3eb46c70659c267
+behaviortree_cpp_v3 https://github.com/BehaviorTree/BehaviorTree.CPP.git 9d624dc7797b4752e5f8616793ffcee4b540a185
+angles https://github.com/ros/angles.git 4b71a44dd2b3a24d7af30bf94b0ba34ece1d0558
+bond_core https://github.com/ros/bond_core.git 1e589099eb383e488e6078154018cd382a792ea8
+diagnostics https://github.com/ros/diagnostics.git de779cfd3bff7975f158971c58bedf0581148f9a
+navigation_msgs https://github.com/ros-planning/navigation_msgs.git 1d8683359734a2c829b5cdb6b5a4e015bbbcb6a5
+laser_geometry https://github.com/ros-perception/laser_geometry.git d53b925d25b4b5657261a44f4479365965cc2363

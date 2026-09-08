@@ -1,11 +1,15 @@
 # ActuCore — 执行模型层配置
 #
 # 与 perception/config.yaml 同构：mcp_port + 每张卡片的开关与参数。
-# 当前不带任何卡片，plugins 为空。
+# 所有卡片共用本配置；注册卡片不等于启动算法或取得执行权。
 
 mcp_port: 15730
 
-plugins: {}
+plugins:
+  planar_navigation:
+    enabled: true
+    execution_enabled: false
+    data_dir: /data/planar_navigation
   # 新增卡片后在这里打开它，例如：
   #
   # vla:

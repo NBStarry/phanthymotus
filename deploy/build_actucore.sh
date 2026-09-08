@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # build_actucore.sh — 构建 actucore（执行模型层）镜像并推送
 #
-# 默认 Jetson GPU 版；--variant planar 是不含 FAST-LIVO2/CUDA 的二维导航 CPU 版。
+# 所有 ActuCore 卡片共用标准 Jetson 镜像，不提供单卡片构建变体。
 #
 # Usage:
 #   ./build_actucore.sh                          # JetPack 5.11（默认），交互选源
 #   ./build_actucore.sh --jp-version 6.1         # JetPack 6.1
 #   ./build_actucore.sh --mirror tuna
-#   ./build_actucore.sh --variant planar --mirror tuna --local
+#   ./build_actucore.sh --jp-version 6.1 --mirror tuna --local
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,20 +24,14 @@ eval "$(parse_mirror_arg "$@")"
 
 # ── 解析参数 ─────────────────────────────────────────────────────────
 JP_VERSION="5.11"
-VARIANT="jetson"
 LOCAL_ONLY=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --variant) VARIANT="$2"; shift 2 ;;
         --local) LOCAL_ONLY=true; shift ;;
         --jp-version) JP_VERSION="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
-if [[ "${VARIANT}" != "jetson" && "${VARIANT}" != "planar" ]]; then
-    echo "Unknown variant: ${VARIANT}" >&2
-    exit 1
-fi
 
 RESOURCE_CENTER_URL="${RESOURCE_CENTER_URL:-https://motus.phanthy.com}"
 
@@ -58,24 +52,16 @@ if ${LOCAL_ONLY}; then
 fi
 COMMIT="$(git -C "${REPO_ROOT}" rev-parse --short=7 HEAD)"
 
-# ── Jetson-only：执行模型都要 GPU，没有 CPU 变体 ──────────────────────
+# ── 所有卡片统一打入框架 Jetson 镜像 ─────────────────────────────────
 DOCKERFILE="${REPO_ROOT}/actucore/Dockerfile.jetson"
 BUILD_CONTEXT="${REPO_ROOT}"
 TAG="release.${DATE}.${COMMIT}-jetson-jp${JP_VERSION}"
 
-BUILD_ARGS=""
 # ── 根据 jp_version 选择 base image  ────────────────────────
 # 表在 build_common.sh 的 jetpack_vars 里，build_perception.sh 共用同一份。
 jetpack_vars "${JP_VERSION}" || exit 1
-BUILD_ARGS="${BUILD_ARGS} JP_VERSION=${JP_ARG}"
-CARDS_JSON='[]'
-if [[ "${VARIANT}" == "planar" ]]; then
-    DOCKERFILE="${REPO_ROOT}/actucore/Dockerfile.planar"
-    TAG="release.${DATE}.${COMMIT}-planar"
-    BUILD_ARGS=""
-    ACC_ARCH="cpu"
-    CARDS_JSON='["PlanarSemanticNavigation"]'
-fi
+BUILD_ARGS=("JP_VERSION=${JP_ARG}" "BUILD_JOBS=${BUILD_JOBS:-2}" "GIT_MIRROR_PREFIX=${GIT_MIRROR_PREFIX:-}")
+CARDS_JSON='["PlanarSemanticNavigation"]'
 
 # Dockerfile.jetson 基于 L4T base image —— 只有 arm64
 CPU_ARCH="arm64"
@@ -83,7 +69,7 @@ CPU_ARCH="arm64"
 FULL_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/actucore:${TAG}"
 
 echo "============================================"
-echo "Building actucore image (${VARIANT})"
+echo "Building actucore image (Jetson)"
 echo "Image  : ${FULL_IMAGE}"
 echo "Arch   : ${ARCH} (native=${IS_ARM64})"
 echo "Runs on: ${ACC_ARCH} / ${CPU_ARCH}"
@@ -96,12 +82,8 @@ fi
 
 select_mirror
 
-# trim leading and trailing space
-BUILD_ARGS="${BUILD_ARGS#${BUILD_ARGS%%[![:space:]]*}}"
-BUILD_ARGS="${BUILD_ARGS%${BUILD_ARGS##*[![:space:]]}}"
-
 BUILD_STARTED="${SECONDS}"
-do_build "${DOCKERFILE}" "${BUILD_CONTEXT}" "${FULL_IMAGE}" ${BUILD_ARGS:+"${BUILD_ARGS}"}
+do_build "${DOCKERFILE}" "${BUILD_CONTEXT}" "${FULL_IMAGE}" "${BUILD_ARGS[@]}"
 echo "ACTUCORE_BUILD_DURATION_SEC=$((SECONDS - BUILD_STARTED))"
 
 if ${PUSH_ENABLED}; then
@@ -127,9 +109,7 @@ if ${PUSH_ENABLED} && [ -n "${RESOURCE_CENTER_API_KEY:-}" ]; then
     fi
     if [[ ! "${SYNC_CONFIRM}" =~ ^[Nn] ]]; then
         echo "Registering image to resource-center (${RESOURCE_CENTER_URL})..."
-        # cards 目前为空：actucore/plugins/ 还没有任何已注册的卡片（见
-        # actucore/main.py 的卡片注册区注释和 actucore/README.md）。第一个卡片落地时
-        # 把它加进这个数组，不要漏掉。
+        # 与标准镜像默认配置中启用的卡片保持一致。
         HTTP_STATUS=$(curl -s -o /tmp/rc_register_resp.json -w "%{http_code}" \
             -X POST "${RESOURCE_CENTER_URL}/api/admin/register" \
             -H "Content-Type: application/json" \

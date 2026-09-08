@@ -46,24 +46,32 @@ class PlanarTests(unittest.TestCase):
         self.assertTrue(fresh(19.9, 9.9, 20, 10, 0.5))
         self.assertFalse(fresh(21, 9.9, 20, 10, 0.5))
 
-    def test_dockerfile_mirror_expression_runs(self):
-        dockerfile = Path(__file__).resolve().parents[1] / "Dockerfile.planar"
-        expression = dockerfile.read_text().split('sed -E -i "', 1)[1].split('"', 1)[0]
-        expression = expression.replace("${APT_MIRROR}", "mirrors.tuna.tsinghua.edu.cn")
-        for host, path in (("ports.ubuntu.com", "ubuntu-ports"),
-                           ("mirrors.tencentyun.com", "ubuntu-ports"),
-                           ("archive.ubuntu.com", "ubuntu"),
-                           ("security.ubuntu.com", "ubuntu")):
-            result = subprocess.run(["sed", "-E", expression],
-                                    input=f"http://{host}/{path} jammy main\n",
-                                    capture_output=True, text=True, check=True)
-            self.assertEqual(result.stdout,
-                             f"https://mirrors.tuna.tsinghua.edu.cn/{path} jammy main\n")
-        types_expression = dockerfile.read_text().split("sed -E -i 's/^Types:", 1)[1].split("'", 1)[0]
-        result = subprocess.run(["sed", "-E", "s/^Types:" + types_expression],
-                                input="Types: deb deb-src\nSigned-By: keyring.gpg\n",
-                                capture_output=True, text=True, check=True)
-        self.assertEqual(result.stdout, "Types: deb\nSigned-By: keyring.gpg\n")
+    def test_standard_image_and_mirror_commands(self):
+        root = Path(__file__).resolve().parents[1]
+        text = (root / "Dockerfile.jetson").read_text()
+        self.assertIn("FROM bj-warehouse.tencentcloudcr.com/phanthy-motus/jetson-base:jp${JP_VERSION}-torch", text)
+        self.assertNotIn("ros-humble-", text)
+        self.assertNotIn("trusted=yes", text)
+        self.assertIn("Dir::Etc::sourceparts=-", text)
+        self.assertIn("COPY actucore/config.yaml /work/config.yaml", text)
+        command = "for suite in " + text.split("for suite in ", 1)[1].split(" > /tmp/actucore-ubuntu.list", 1)[0]
+        command = command.replace("\\\n", "")
+        for codename in ("focal", "jammy"):
+            result = subprocess.run(["bash", "-c", command], capture_output=True, text=True,
+                                    env={**os.environ, "VERSION_CODENAME": codename,
+                                         "APT_MIRROR": "mirrors.tuna.tsinghua.edu.cn"}, check=True)
+            lines = result.stdout.splitlines()
+            self.assertEqual(len(lines), 3)
+            self.assertTrue(all(line.startswith("deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports ") for line in lines))
+            self.assertIn(codename + "-security", lines[-1])
+        builder = root / "plugins/planar_navigation/build-dependencies.sh"
+        rejected = subprocess.run(["bash", str(builder)], env={**os.environ, "BUILD_JOBS": "0"},
+                                  capture_output=True, text=True)
+        self.assertEqual(rejected.returncode, 2)
+        self.assertIn("invalid BUILD_JOBS", rejected.stderr)
+        for row in (builder.parent / "sources.lock").read_text().splitlines():
+            if row and not row.startswith("#"):
+                self.assertRegex(row.split()[2], r"^[0-9a-f]{40}$")
 
     def test_proposal_stop_and_recovery(self):
         out, clock = [], [10.0]

@@ -9,7 +9,7 @@ Hardware → Driver·Sensor → Perception → Agent Loop → ActuCore → Drive
 
 执行模型（VLA 策略、导航、抓取策略、locomotion、whole-body control）以**卡片**的形式挂在这里，聚合成一个 MCP HTTP server，由 Agent Core 通过 MCP JSON-RPC 调用。
 
-默认 Jetson 配置保持空卡片；`planar` CPU 构建变体提供独立的[二维语义导航](plugins/planar_navigation/README.md) `PlanarSemanticNavigation`。不依赖 FAST-LIVO2，不改变三维导航产品，默认只发内部预览提案。
+标准镜像包含[二维语义导航](plugins/planar_navigation/README.md) `PlanarSemanticNavigation`，与其他 ActuCore 卡片共用镜像、配置和服务入口，不提供单卡片镜像。不依赖 FAST-LIVO2，不改变三维导航产品，默认只发内部预览提案；算法仅在启动卡片后运行。
 
 | | |
 |---|---|
@@ -24,16 +24,16 @@ Hardware → Driver·Sensor → Perception → Agent Loop → ActuCore → Drive
 
 ## 构建与运行
 
-默认构建 Jetson GPU 版；二维导航使用独立 ROS Humble CPU 变体，不要求 CUDA。共用脚本输出 ARM64；CPU Dockerfile 也可在 AMD64 直接构建。
+统一使用框架的 Jetson base（CUDA torch + 源码 ROS Humble），输出 ARM64。二维导航本身不使用 GPU，但不为此分拆部署镜像。
 
 ```bash
 ./deploy/build_actucore.sh                    # JetPack 5.11（默认）
 ./deploy/build_actucore.sh --jp-version 6.1   # JetPack 6.1
 ./deploy/build_actucore.sh --mirror tuna      # 指定 pip / apt 源
-./deploy/build_actucore.sh --variant planar --mirror tuna --local
+./deploy/build_actucore.sh --jp-version 6.1 --mirror tuna --local # 只构建，不推送或注册
 ```
 
-镜像刻意做薄 —— 除了 MCP server 本身，只保留 base 镜像自带的 CUDA torch 和 ROS2 环境。加卡片时把该卡片的依赖放在它自己的 `RUN` 层，不要预装在基础层里。
+卡片依赖放在标准 `Dockerfile.jetson` 对应的构建层。二维导航依赖以固定源码版本、基于已有 ROS 构建，不安装第二套 ROS；默认编译并行度为 2，可设置 `BUILD_JOBS`。Git 下载可通过 `GIT_MIRROR_PREFIX` 指定前缀，APT/PyPI 沿用 `--mirror`。
 
 部署走 Dashboard 的服务部署页，或直接把 `deploy/service.yml` 合并进 `/opt/phanthy-motus/docker-compose.yml`（Agent Core 会从镜像里抽这个片段，见 `agent-core/src/api/drivers.py`）。
 
@@ -111,7 +111,7 @@ TOOLS = [
        self._plugins.append(XPlugin(plugins_cfg["<name>"], executor))
        log.info("XPlugin loaded")
    ```
-4. 该卡片需要的依赖加到 `Dockerfile`（以及 `Dockerfile.jetson`，如果要跑 GPU）
+4. 该卡片需要的依赖加到标准 `Dockerfile.jetson`，不要创建单卡片镜像
 5. 重建镜像、重新部署，确认 Dashboard 侧边栏「执行」分区里出现了它
 
 需要 ROS 命名空间的卡片（topic 里要带机器人名）多一步：namespace 为空时用 hostname 兜底，写法参照 `perception/main.py` 里 vop 的注册块。

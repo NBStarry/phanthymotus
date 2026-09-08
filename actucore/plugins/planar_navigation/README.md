@@ -124,7 +124,7 @@ map_revision_mismatch。首版不支持边建图边记录地点，避免回环�
 
 ~~~bash
 # 仓库根目录：只构建本地，不登录、不推送或注册。
-bash deploy/build_actucore.sh --variant planar --mirror tuna --local
+bash deploy/build_actucore.sh --jp-version 6.1 --mirror tuna --local
 
 # 无 ROS 的本地测试，需 Pillow、PyYAML；测试目录不访问真实配置数据库。
 python3 -m unittest discover -s actucore/tests -p test_planar_navigation.py -v
@@ -132,20 +132,24 @@ python3 -m unittest discover -s actucore/tests -p test_planar_navigation.py -v
 # 镜像构建后替换 <IMAGE>。隔离网络和域，不挂设备、不连 Driver。
 docker run --rm --network none \
   -e ROS_DOMAIN_ID=191 -e ROS_LOCALHOST_ONLY=1 \
-  <IMAGE> python3 /work/tests/planar_ros_smoke.py
+  <IMAGE> bash -c 'source /ros_ws/install/setup.bash && python3 /work/tests/planar_ros_smoke.py'
 ~~~
 
-镜像基于标准 ROS Humble Jammy，APT 使用国内 HTTPS 镜像并保留签名校验。
-测试会直接执行 Dockerfile 的 Ubuntu 换源表达式，覆盖 ARM64 和 AMD64 源地址。
-旧式 .list 和 Deb822 .sources 均跳过不需要的源码索引，避免 ROS 镜像源的 Sources 404；保留签名配置。
-锁定 SLAM Toolbox 2.6.10 与 Nav2 1.1.20 的上游版本；发行包重建后缀允许变化，
-实际安装清单留在 /work/dependency-versions.txt。当前基础镜像是 tag，
-还不能宣称完全逐字节可复现；发布前记录验证镜像的 RepoDigest。
+卡片随标准 ActuCore 镜像构建，继承框架 `jetson-base:jp${JP_VERSION}-torch`，
+保留 CUDA torch、原有卡片、配置和部署入口；不再提供独立 CPU/planar 镜像。
+二维算法本身不用 GPU，不代表整个共享镜像没有 GPU 依赖。新增算法只在启动卡片时运行。
+APT 只读取临时生成的国内 HTTPS Ubuntu 二进制源并保留签名校验，不读取基础镜像的
+ROS APT 索引，也不安装第二套 ROS。测试实际执行 focal/jammy 的源生成命令。
+SLAM Toolbox 2.6.10、Nav2 及传递源码提交锁定在 [sources.lock](sources.lock)，
+只编译基础镜像缺少的包，产物在 `/opt/actucore_navigation_ws/install`。
+源码锁和系统包清单留在 `/opt/actucore_navigation_ws/`；基础镜像仍使用框架 tag，
+不承诺逐字节可复现，发布需记录最终 RepoDigest。`BUILD_JOBS` 默认 2；
+`GIT_MIRROR_PREFIX` 可指定源码下载镜像前缀，下载有超时和三次重试。
 SLAM Toolbox 为 LGPL（上游仓库标识 LGPL-2.1），Nav2 为 Apache-2.0；
 发行包及传递依赖保留原许可证。没有复制 FAST-LIVO2/GPL 算法代码。
 
 标准基础镜像可能需要下载；构建前检查 Docker 数据目录磁盘而不只是代码目录。
-建议至少 8 GiB 可用构建空间，这是操作预留值，不是实测镜像增量。
+共享 CUDA/ROS 基础镜像较大，建议至少 30 GiB 可用构建空间，这是操作预留值，不是实测镜像增量。
 不能因代码目录位于 NVMe 就假定 /var/lib/docker 也在 NVMe。
 
 真实 ROS smoke 使用合成矩形房间和理想运动模型，实际启动算法子进程，

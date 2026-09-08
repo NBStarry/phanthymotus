@@ -7,7 +7,7 @@ ActuCore 把意图/目标变成运动指令。执行模型（VLA、导航、抓�
 whole-body control）以卡片（插件）的形式挂在这里，聚合成一个 MCP HTTP server
 对外暴露，由 Agent Core 通过 MCP JSON-RPC 调用。
 
-默认 Jetson 配置为空；planar 构建变体启用独立二维语义导航卡片。
+所有卡片共用标准 Jetson 镜像，按 config.yaml 显式注册；二维导航仅在 Canvas 启动时运行算法。
 新增卡片的完整步骤见 README.md。
 
 MCP 工具命名规则：{plugin_prefix}_{tool_name}
