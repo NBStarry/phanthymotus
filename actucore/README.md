@@ -9,7 +9,7 @@ Hardware → Driver·Sensor → Perception → Agent Loop → ActuCore → Drive
 
 执行模型（VLA 策略、导航、抓取策略、locomotion、whole-body control）以**卡片**的形式挂在这里，聚合成一个 MCP HTTP server，由 Agent Core 通过 MCP JSON-RPC 调用。
 
-**当前不带任何卡片** —— 这一版是骨架加全链路打通。`tools/list` 返回空数组，服务照样注册、探活、在 Dashboard 侧边栏「执行」分区里显示（count 0）。
+默认 Jetson 配置保持空卡片；`planar` CPU 构建变体提供独立的[二维语义导航](plugins/planar_navigation/README.md) `PlanarSemanticNavigation`。不依赖 FAST-LIVO2，不改变三维导航产品，默认只发内部预览提案。
 
 | | |
 |---|---|
@@ -24,12 +24,13 @@ Hardware → Driver·Sensor → Perception → Agent Loop → ActuCore → Drive
 
 ## 构建与运行
 
-只有 Jetson GPU 版 —— 执行模型（VLA、抓取策略、locomotion）都要 GPU，没有 CPU 变体。
+默认构建 Jetson GPU 版；二维导航使用独立 ROS Humble CPU 变体，不要求 CUDA。共用脚本输出 ARM64；CPU Dockerfile 也可在 AMD64 直接构建。
 
 ```bash
 ./deploy/build_actucore.sh                    # JetPack 5.11（默认）
 ./deploy/build_actucore.sh --jp-version 6.1   # JetPack 6.1
 ./deploy/build_actucore.sh --mirror tuna      # 指定 pip / apt 源
+./deploy/build_actucore.sh --variant planar --mirror tuna --local
 ```
 
 镜像刻意做薄 —— 除了 MCP server 本身，只保留 base 镜像自带的 CUDA torch 和 ROS2 环境。加卡片时把该卡片的依赖放在它自己的 `RUN` 层，不要预装在基础层里。

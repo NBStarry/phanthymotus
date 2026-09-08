@@ -1,0 +1,17 @@
+actucore:
+  image: __IMAGE__
+  container_name: embodied-actucore
+  network_mode: host
+  # DDS only: no devices, privileged mode, Docker socket, or host PID.
+  volumes:
+    - /opt/phanthy-motus/data/planar_navigation:/data/planar_navigation
+  environment:
+    - ROS_DOMAIN_ID=42
+    - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+  logging:
+    driver: local
+    options:
+      max-size: "10m"
+      max-file: "3"
+  restart: unless-stopped

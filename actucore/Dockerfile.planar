@@ -1,0 +1,55 @@
+# CPU-only planar navigation. Build context: repository root.
+ARG PLANAR_BASE_IMAGE=ros:humble-ros-base-jammy
+FROM ${PLANAR_BASE_IMAGE}
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
+ARG ROS_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/ros2/ubuntu
+ARG PYPI_MIRROR=https://pypi.tuna.tsinghua.edu.cn/simple/
+ARG SLAM_TOOLBOX_VERSION=2.6.10
+ARG NAV2_VERSION=1.1.20
+# Keep the base's signed ROS keyring. No trusted=yes or unauthenticated installs.
+RUN set -eu; \
+    for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do \
+      [ -f "$f" ] || continue; \
+      if [ -n "${APT_MIRROR}" ]; then \
+        sed -E -i "s|https?://(ports.ubuntu.com|mirrors.tencentyun.com)/ubuntu-ports|https://${APT_MIRROR}/ubuntu-ports|g; s|https?://(archive.ubuntu.com|security.ubuntu.com)/ubuntu|https://${APT_MIRROR}/ubuntu|g" "$f"; \
+      fi; \
+      sed -E -i "s|https?://packages.ros.org/ros2/ubuntu|${ROS_MIRROR}|g" "$f"; \
+      if [[ "$f" == *.list ]]; then \
+        sed -E -i '/^[[:space:]]*deb-src .*ros2\/ubuntu/s/^/# disabled unused ROS source index: /' "$f"; \
+      fi; \
+    done; \
+    apt-get -o APT::Update::Error-Mode=any update; \
+    apt-get install -y --no-install-recommends \
+      "ros-humble-slam-toolbox=${SLAM_TOOLBOX_VERSION}-*" \
+      "ros-humble-nav2-amcl=${NAV2_VERSION}-*" \
+      "ros-humble-nav2-map-server=${NAV2_VERSION}-*" \
+      "ros-humble-nav2-planner=${NAV2_VERSION}-*" \
+      "ros-humble-nav2-navfn-planner=${NAV2_VERSION}-*" \
+      "ros-humble-nav2-controller=${NAV2_VERSION}-*" \
+      "ros-humble-nav2-regulated-pure-pursuit-controller=${NAV2_VERSION}-*" \
+      "ros-humble-nav2-bt-navigator=${NAV2_VERSION}-*" \
+      "ros-humble-nav2-lifecycle-manager=${NAV2_VERSION}-*" \
+      ros-humble-rmw-fastrtps-cpp ros-humble-tf2-ros ros-humble-tf2-geometry-msgs \
+      python3-pil python3-yaml python3-requests; \
+    mkdir -p /work; \
+    dpkg-query -W > /work/dependency-versions.txt; \
+    rm -rf /var/lib/apt/lists/*
+WORKDIR /work
+COPY actucore/main.py /work/main.py
+COPY perception/utils/logsafe.py /work/logsafe.py
+COPY actucore/plugins/ /work/plugins/
+COPY actucore/plugins/planar_navigation/config.yaml /work/config.yaml
+COPY actucore/plugins/planar_navigation/service.yml /deploy/service.yml
+COPY actucore/tests/test_planar_navigation.py /work/tests/test_planar_navigation.py
+COPY actucore/tests/planar_ros_smoke.py /work/tests/planar_ros_smoke.py
+RUN source /opt/ros/humble/setup.bash && \
+    python3 -m unittest discover -s /work/tests -p test_planar_navigation.py -v && \
+    python3 -c 'from plugins.planar_navigation.runtime import Runtime; from nav2_msgs.action import NavigateToPose'
+ENV ROS_DOMAIN_ID=42 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+EXPOSE 15730
+LABEL org.opencontainers.image.title="ActuCore Planar Semantic Navigation" \
+      org.opencontainers.image.slam-toolbox-version="2.6.10" \
+      org.opencontainers.image.nav2-version="1.1.20"
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["python3", "/work/main.py"]

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # build_actucore.sh — 构建 actucore（执行模型层）镜像并推送
 #
-# 只有 Jetson GPU 版：执行模型（VLA / 抓取策略 / locomotion）都要 GPU，
-# 没有 CPU 变体。
+# 默认 Jetson GPU 版；--variant planar 是不含 FAST-LIVO2/CUDA 的二维导航 CPU 版。
 #
 # Usage:
 #   ./build_actucore.sh                          # JetPack 5.11（默认），交互选源
 #   ./build_actucore.sh --jp-version 6.1         # JetPack 6.1
 #   ./build_actucore.sh --mirror tuna
+#   ./build_actucore.sh --variant planar --mirror tuna --local
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,12 +24,20 @@ eval "$(parse_mirror_arg "$@")"
 
 # ── 解析参数 ─────────────────────────────────────────────────────────
 JP_VERSION="5.11"
+VARIANT="jetson"
+LOCAL_ONLY=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --variant) VARIANT="$2"; shift 2 ;;
+        --local) LOCAL_ONLY=true; shift ;;
         --jp-version) JP_VERSION="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
+if [[ "${VARIANT}" != "jetson" && "${VARIANT}" != "planar" ]]; then
+    echo "Unknown variant: ${VARIANT}" >&2
+    exit 1
+fi
 
 RESOURCE_CENTER_URL="${RESOURCE_CENTER_URL:-https://motus.phanthy.com}"
 
@@ -43,6 +51,11 @@ if [ -z "${REGISTRY:-}" ] || [ -z "${REGISTRY_USER:-}" ] || [ -z "${REGISTRY_PAS
 fi
 
 DATE="$(date +%y%m%d)"
+if ${LOCAL_ONLY}; then
+    PUSH_ENABLED=false
+    REGISTRY=local
+    IMAGE_NAMESPACE=phanthy-motus
+fi
 COMMIT="$(git -C "${REPO_ROOT}" rev-parse --short=7 HEAD)"
 
 # ── Jetson-only：执行模型都要 GPU，没有 CPU 变体 ──────────────────────
@@ -55,6 +68,14 @@ BUILD_ARGS=""
 # 表在 build_common.sh 的 jetpack_vars 里，build_perception.sh 共用同一份。
 jetpack_vars "${JP_VERSION}" || exit 1
 BUILD_ARGS="${BUILD_ARGS} JP_VERSION=${JP_ARG}"
+CARDS_JSON='[]'
+if [[ "${VARIANT}" == "planar" ]]; then
+    DOCKERFILE="${REPO_ROOT}/actucore/Dockerfile.planar"
+    TAG="release.${DATE}.${COMMIT}-planar"
+    BUILD_ARGS=""
+    ACC_ARCH="cpu"
+    CARDS_JSON='["PlanarSemanticNavigation"]'
+fi
 
 # Dockerfile.jetson 基于 L4T base image —— 只有 arm64
 CPU_ARCH="arm64"
@@ -62,8 +83,7 @@ CPU_ARCH="arm64"
 FULL_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/actucore:${TAG}"
 
 echo "============================================"
-echo "Building actucore image (Jetson only)"
-echo "PyTorch for JetPack: JP${JP_VERSION}"
+echo "Building actucore image (${VARIANT})"
 echo "Image  : ${FULL_IMAGE}"
 echo "Arch   : ${ARCH} (native=${IS_ARM64})"
 echo "Runs on: ${ACC_ARCH} / ${CPU_ARCH}"
@@ -80,7 +100,9 @@ select_mirror
 BUILD_ARGS="${BUILD_ARGS#${BUILD_ARGS%%[![:space:]]*}}"
 BUILD_ARGS="${BUILD_ARGS%${BUILD_ARGS##*[![:space:]]}}"
 
-do_build "${DOCKERFILE}" "${BUILD_CONTEXT}" "${FULL_IMAGE}" "${BUILD_ARGS}"
+BUILD_STARTED="${SECONDS}"
+do_build "${DOCKERFILE}" "${BUILD_CONTEXT}" "${FULL_IMAGE}" ${BUILD_ARGS:+"${BUILD_ARGS}"}
+echo "ACTUCORE_BUILD_DURATION_SEC=$((SECONDS - BUILD_STARTED))"
 
 if ${PUSH_ENABLED}; then
     do_push "${FULL_IMAGE}"
@@ -122,7 +144,7 @@ if ${PUSH_ENABLED} && [ -n "${RESOURCE_CENTER_API_KEY:-}" ]; then
                 \"name\": \"ActuCore\",
                 \"port\": 15730,
                 \"description\": \"执行模型层 — VLA 策略 / 导航 / 抓取 / locomotion / 全身控制，以 processor 卡片接入\",
-                \"cards\": []
+                \"cards\": ${CARDS_JSON}
             }")
 
         if [ "${HTTP_STATUS}" = "200" ] || [ "${HTTP_STATUS}" = "201" ]; then

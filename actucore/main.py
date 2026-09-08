@@ -7,7 +7,7 @@ ActuCore 把意图/目标变成运动指令。执行模型（VLA、导航、抓�
 whole-body control）以卡片（插件）的形式挂在这里，聚合成一个 MCP HTTP server
 对外暴露，由 Agent Core 通过 MCP JSON-RPC 调用。
 
-当前版本不带任何卡片 —— 这是骨架 + 全链路（注册、探活、部署）打通。
+默认 Jetson 配置为空；planar 构建变体启用独立二维语义导航卡片。
 新增卡片的完整步骤见 README.md。
 
 MCP 工具命名规则：{plugin_prefix}_{tool_name}
@@ -127,6 +127,12 @@ class ActuCoreBundle:
         # 卡片契约（PREFIX 不能含下划线、action.enum 必须含 "info" 等）见 README.md。
         # ──────────────────────────────────────────────────────────────────
 
+        if plugins_cfg.get("planar_navigation", {}).get("enabled", False):
+            from plugins.planar_navigation import PlanarNavigationPlugin
+            self._plugins.append(PlanarNavigationPlugin(
+                plugins_cfg["planar_navigation"], executor, completion=sse_push))
+            log.info("PlanarSemanticNavigation loaded (runtime starts only on Canvas start)")
+
         if not self._plugins:
             log.info("no cards enabled — ActuCore is running as an empty MCP host")
 
@@ -171,7 +177,7 @@ def make_handler():
             self.wfile.write(encoded)
 
         def do_GET(self):
-            if self.path.split("?")[0] == "/sse":
+            if self.path.split("?")[0] in ("/sse", "/mcp/sse"):
                 # SSE streaming endpoint for ACP completion events
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
@@ -254,7 +260,8 @@ def make_handler():
                     else:
                         if not is_info:
                             log.info(f"[mcp] tools/call result: {json.dumps(result)[:200]}")
-                        ok({"content": [{"type": "text", "text": json.dumps(result)}]})
+                        ok({"content": [{"type": "text", "text": json.dumps(result)}],
+                            "isError": result.get("status") == "error"})
                 else:
                     err(-32601, f"Method not found: {method}")
             except BrokenPipeError:
@@ -340,6 +347,11 @@ def main():
     try:
         server.serve_forever()
     finally:
+        for plugin in _bundle._plugins:
+            if hasattr(plugin, "stop"):
+                result = plugin.stop()
+                if isinstance(result, dict) and result.get("terminal_confirmed") is False:
+                    log.error("plugin stop unconfirmed; Driver TTL remains authoritative")
         executor.shutdown()
         rclpy.shutdown()
 
