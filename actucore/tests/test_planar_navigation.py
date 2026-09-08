@@ -59,6 +59,11 @@ class PlanarTests(unittest.TestCase):
                                     capture_output=True, text=True, check=True)
             self.assertEqual(result.stdout,
                              f"https://mirrors.tuna.tsinghua.edu.cn/{path} jammy main\n")
+        types_expression = dockerfile.read_text().split("sed -E -i 's/^Types:", 1)[1].split("'", 1)[0]
+        result = subprocess.run(["sed", "-E", "s/^Types:" + types_expression],
+                                input="Types: deb deb-src\nSigned-By: keyring.gpg\n",
+                                capture_output=True, text=True, check=True)
+        self.assertEqual(result.stdout, "Types: deb\nSigned-By: keyring.gpg\n")
 
     def test_proposal_stop_and_recovery(self):
         out, clock = [], [10.0]

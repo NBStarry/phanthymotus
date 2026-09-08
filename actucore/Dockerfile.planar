@@ -17,6 +17,8 @@ RUN set -eu; \
       sed -E -i "s|https?://packages.ros.org/ros2/ubuntu|${ROS_MIRROR}|g" "$f"; \
       if [[ "$f" == *.list ]]; then \
         sed -E -i '/^[[:space:]]*deb-src .*ros2\/ubuntu/s/^/# disabled unused ROS source index: /' "$f"; \
+      elif [[ "$f" == *.sources ]]; then \
+        sed -E -i 's/^Types:[[:space:]]+.*/Types: deb/' "$f"; \
       fi; \
     done; \
     apt-get -o APT::Update::Error-Mode=any update; \
