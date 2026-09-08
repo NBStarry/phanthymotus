@@ -25,7 +25,8 @@ RUN set -e; source /etc/os-release; \
       libgraphicsmagick++1-dev python3-pil && \
     rm -rf /var/lib/apt/lists/* && rm /tmp/actucore-ubuntu.list
 
-RUN pip3 install --no-cache-dir -i "${PYPI_MIRROR}" colcon-common-extensions "empy<4"
+RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} colcon-common-extensions && \
+    pip3 install --no-cache-dir -i ${PYPI_MIRROR} "empy<4"
 COPY actucore/plugins/planar_navigation/sources.lock actucore/plugins/planar_navigation/build-dependencies.sh /tmp/planar-build/
 RUN bash /tmp/planar-build/build-dependencies.sh
 
