@@ -140,6 +140,8 @@ docker run --rm --network none \
 `actucore-planar-navigation-base`，再由统一 ActuCore 镜像消费。base 不是可部署
 卡片，不复制应用代码，也不注册 Resource Center。它继承框架 `jetson-base:jp${JP_VERSION}-torch`，
 保留 CUDA torch、原有卡片、配置和部署入口；不再提供独立 CPU/planar 镜像。
+标准 JP6.1 构建按 RepoDigest 固定 base，并逐字节核对 `sources.lock`；JP5.11 在
+等价 base 发布前继续源码构建，因此不会改变现有 G1 构建结果。
 二维算法本身不用 GPU，不代表整个共享镜像没有 GPU 依赖。新增算法只在启动卡片时运行。
 APT 只读取临时生成的国内 HTTPS Ubuntu 二进制源并保留签名校验，不读取基础镜像的
 ROS APT 索引，也不安装第二套 ROS。测试实际执行 focal/jammy 的源生成命令。

@@ -34,7 +34,7 @@ Hardware → Driver·Sensor → Perception → Agent Loop → ActuCore → Drive
 ./deploy/build_actucore.sh --base --jp-version 6.1 --mirror tuna --local # 二维导航公共 base
 ```
 
-二维导航的稳定第三方依赖由 `Dockerfile.planar-navigation-base` 一次构建，随后作为标准 `Dockerfile.jetson` 的输入；它不是单卡片部署镜像，也不注册 Resource Center。依赖以固定源码版本、基于已有 ROS 构建，不安装第二套 ROS；默认编译并行度为 2，可设置 `BUILD_JOBS`。Git 下载可通过 `GIT_MIRROR_PREFIX` 指定前缀，APT/PyPI 沿用 `--mirror`。
+二维导航的稳定第三方依赖由 `Dockerfile.planar-navigation-base` 一次构建，随后作为标准 `Dockerfile.jetson` 的输入；它不是单卡片部署镜像，也不注册 Resource Center。JP6.1 构建固定引用仓库 RepoDigest，并核对 `sources.lock`；锁不一致直接失败。JP5.11 在等价 base 发布前继续走原有源码构建，不改变 G1 链路。依赖以固定源码版本、基于已有 ROS 构建，不安装第二套 ROS；默认编译并行度为 2，可设置 `BUILD_JOBS`。Git 下载可通过 `GIT_MIRROR_PREFIX` 指定前缀，APT/PyPI 沿用 `--mirror`。
 
 部署走 Dashboard 的服务部署页，或直接把 `deploy/service.yml` 合并进 `/opt/phanthy-motus/docker-compose.yml`（Agent Core 会从镜像里抽这个片段，见 `agent-core/src/api/drivers.py`）。
 

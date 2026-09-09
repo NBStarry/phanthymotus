@@ -63,6 +63,7 @@ TAG="release.${DATE}.${COMMIT}-jetson-jp${JP_VERSION}"
 jetpack_vars "${JP_VERSION}" || exit 1
 BUILD_ARGS=("JP_VERSION=${JP_ARG}" "BUILD_JOBS=${BUILD_JOBS:-2}" "GIT_MIRROR_PREFIX=${GIT_MIRROR_PREFIX:-}")
 CARDS_JSON='["PlanarSemanticNavigation"]'
+PLANAR_BASE_JP61="bj-warehouse.tencentcloudcr.com/phanthy-motus/actucore-planar-navigation-base@sha256:809ef1af003fee5d0eb8aced99e516b6e81daa05212d7fe14c522631f0284ca8"
 
 if ${BUILD_BASE}; then
     if ! ${IS_ARM64}; then
@@ -74,6 +75,9 @@ if ${BUILD_BASE}; then
 else
     DOCKERFILE="${REPO_ROOT}/actucore/Dockerfile.jetson"
     IMAGE_NAME="actucore"
+    if [ "${JP_VERSION}" = "6.1" ]; then
+        BUILD_ARGS+=("ACTUCORE_PARENT_IMAGE=${PLANAR_BASE_JP61}")
+    fi
 fi
 
 # Dockerfile.jetson 基于 L4T base image —— 只有 arm64

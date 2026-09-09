@@ -1,5 +1,6 @@
 # ── Jetson GPU variant ──────────────────────────────────────────────
-# Base: jetson-base:jp511-torch (torch 2.0 + torchvision 0.15 with CUDA)
+# Base: JP6.1 uses the pinned planar-navigation base; JP5.11 falls back to
+# jetson-base and builds the same locked navigation overlay in this file.
 #
 # All cards share this image and the framework's CUDA torch / source ROS base.
 # Planar navigation adds an overlay; it does not install a second ROS distro.
@@ -14,33 +15,36 @@
 ARG PYPI_MIRROR=https://pypi.tuna.tsinghua.edu.cn/simple/
 ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
 ARG JP_VERSION=511
-FROM bj-warehouse.tencentcloudcr.com/phanthy-motus/jetson-base:jp${JP_VERSION}-torch
+ARG ACTUCORE_PARENT_IMAGE=bj-warehouse.tencentcloudcr.com/phanthy-motus/jetson-base:jp${JP_VERSION}-torch
+FROM ${ACTUCORE_PARENT_IMAGE}
 ARG PYPI_MIRROR APT_MIRROR
 ARG BUILD_JOBS=2
 ARG GIT_MIRROR_PREFIX=
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Use only signed Ubuntu binary indexes for these system dependencies. Do not
-# use inherited ROS apt sources: Humble is already source-built in this base.
-RUN set -e; source /etc/os-release; \
-    for suite in "${VERSION_CODENAME}" "${VERSION_CODENAME}-updates" "${VERSION_CODENAME}-security"; do \
-      printf 'deb https://%s/ubuntu-ports %s main restricted universe multiverse\n' \
-        "${APT_MIRROR:-ports.ubuntu.com}" "$suite"; \
-    done > /tmp/actucore-ubuntu.list; \
-    apt_args=(-o Dir::Etc::sourcelist=/tmp/actucore-ubuntu.list -o Dir::Etc::sourceparts=- \
-              -o APT::Update::Error-Mode=any -o Acquire::Retries=3); \
-    apt-get "${apt_args[@]}" update && \
-    apt-get "${apt_args[@]}" install -y --no-install-recommends \
-      build-essential cmake git pkg-config libboost-program-options-dev libeigen3-dev \
-      libceres-dev libsuitesparse-dev liblapack-dev libtbb-dev qtbase5-dev \
-      libgraphicsmagick++1-dev python3-pil && \
-    rm -rf /var/lib/apt/lists/* && rm /tmp/actucore-ubuntu.list
-
-RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} colcon-common-extensions && \
-    pip3 install --no-cache-dir -i ${PYPI_MIRROR} "empy<4"
-
 COPY actucore/plugins/planar_navigation/sources.lock actucore/plugins/planar_navigation/build-dependencies.sh /tmp/planar-build/
-RUN bash /tmp/planar-build/build-dependencies.sh
+RUN set -e; if [ -e /opt/actucore_navigation_ws/sources.lock ]; then \
+      cmp -s /tmp/planar-build/sources.lock /opt/actucore_navigation_ws/sources.lock || \
+        { echo 'ERROR=planar navigation base source lock mismatch' >&2; exit 2; }; \
+      test -f /opt/actucore_navigation_ws/install/setup.bash; \
+    else \
+      source /etc/os-release; \
+      for suite in "${VERSION_CODENAME}" "${VERSION_CODENAME}-updates" "${VERSION_CODENAME}-security"; do \
+        printf 'deb https://%s/ubuntu-ports %s main restricted universe multiverse\n' \
+          "${APT_MIRROR:-ports.ubuntu.com}" "$suite"; \
+      done > /tmp/actucore-ubuntu.list; \
+      apt_args=(-o Dir::Etc::sourcelist=/tmp/actucore-ubuntu.list -o Dir::Etc::sourceparts=- \
+                -o APT::Update::Error-Mode=any -o Acquire::Retries=3); \
+      apt-get "${apt_args[@]}" update && \
+      apt-get "${apt_args[@]}" install -y --no-install-recommends \
+        build-essential cmake git pkg-config libboost-program-options-dev libeigen3-dev \
+        libceres-dev libsuitesparse-dev liblapack-dev libtbb-dev qtbase5-dev \
+        libgraphicsmagick++1-dev python3-pil && \
+      rm -rf /var/lib/apt/lists/* && rm /tmp/actucore-ubuntu.list && \
+      pip3 install --no-cache-dir -i ${PYPI_MIRROR} colcon-common-extensions && \
+      pip3 install --no-cache-dir -i ${PYPI_MIRROR} "empy<4" && \
+      bash /tmp/planar-build/build-dependencies.sh; \
+    fi
 
 # ── audio_msgs ROS2 package (Humble already in base) ──────────────
 COPY deploy/ros-base/audio_msgs/ /ros_ws/src/audio_msgs/
