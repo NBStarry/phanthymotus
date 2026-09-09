@@ -46,6 +46,7 @@ COPY agent-core/resource/memory/defaults/ /opt/defaults/memory/
 COPY agent-core/tests/test_local_services.py /work/tests/test_local_services.py
 
 ARG SOURCE_REVISION=unknown
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION}
 ENV IMAGE_TAG=${SOURCE_REVISION}-amd64
 RUN printf '%s-amd64\n' "${SOURCE_REVISION}" > /work/VERSION
 

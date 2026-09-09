@@ -133,6 +133,25 @@ versions.lock.yaml              上游与仿真版本锁
 
 源码仓必须通过远端已验证 GitHub 镜像获取。模型、数据集、镜像归档、bag 和仿真资源等大文件必须在远端直接下载到 JuiceFS 或 Docker 本地卷，禁止先下载到 Mac 再上传。
 
+公共层镜像必须从 `4paradigm/phanthymotus` 的干净 `main` 检出构建；`sim`
+分支只提供 AMD64 打包和仿真 Driver，不作为 Core、Perception、ActuCore 的
+业务源码。以下命令复用现有仓库，并用 `sim-` 标签避免和 ARM64 正式发布镜像混淆：
+
+```bash
+export PLATFORM_SOURCE_DIR=/mnt/data/hanzebei/projects/phanthymotus-main
+export PLATFORM_REVISION="$(git -C "$PLATFORM_SOURCE_DIR" rev-parse origin/main)"
+export BUILD_PROXY=http://<proxy-host>:<port>
+bash scripts/build-platform-images.sh build
+
+# 先在当前执行用户下完成 docker login，再推送；脚本不读取或保存凭证。
+docker login bj-warehouse.tencentcloudcr.com
+bash scripts/build-platform-images.sh push
+```
+
+镜像格式为
+`bj-warehouse.tencentcloudcr.com/phanthy-motus/{core,perception,actucore}:sim-main-<commit>-amd64`。
+推送只发布镜像，不向 Resource Center 注册服务。
+
 wlcb-23 当前无法解析腾讯云 Docker Hub 镜像域名，且公司镜像仓的 blob CDN 被远端网络拒绝。P0 因此以机器上已存在且验证为 `amd64` 的 ROS Humble 镜像 `local/phanthy-motus/ros-base:humble-amd64-c124798-v3` 为构建基底，再用锁定的最新上游源码重建 `audio_msgs`。基础镜像 ID 和创建时间记录在 `versions.lock.yaml`，不得使用同名但 ID 不同的镜像冒充。
 
 ## 端口与隔离
