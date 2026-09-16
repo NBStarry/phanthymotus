@@ -1,0 +1,8 @@
+# Apply after compose.p2.yaml and any fixture overlay. No public service changes.
+services:
+  sim-driver:
+    image: ${SIM_CAMERA_DRIVER_IMAGE:?set verified offscreen camera Driver image}
+    environment:
+      MUJOCO_GL: osmesa
+      SIM_CAMERA_MODE: mujoco
+      SIM_IMAGE_FIXTURE: ""

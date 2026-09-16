@@ -1,6 +1,20 @@
 schema_version: "1.0"
 locked_at: "2026-09-04"
 
+# Independently verified public-source deployment; does not change the sim branch's historical base.
+public_applications:
+  revision: 125db64fb860ebc66f62f1cf7ad994e7a3083f9e
+  platform: linux/amd64
+  published_at: "2026-09-15"
+  core: bj-warehouse.tencentcloudcr.com/phanthy-motus/core@sha256:02426d8d1a3b73a75de9931c1b18041f702b169bebe2b0702a3d3e24e3fd07c3
+  perception: bj-warehouse.tencentcloudcr.com/phanthy-motus/perception@sha256:b34ab074e9ba03b9ada32a82c2868564c6771c3693d90a6456d5ef30c9717b25
+  actucore: bj-warehouse.tencentcloudcr.com/phanthy-motus/actucore@sha256:c3ae9b6e892e7ba6d9d9bd5482ce264943d3c38e75560872a17439008c4ef630
+published_sim_driver:
+  image: bj-warehouse.tencentcloudcr.com/phanthy-motus/drivers/sim/g1@sha256:a01b084dcc31386e5179ed8445733f45805ba0df338aea09f00b71406cf2d467
+  source_archive_sha256_prefix: 7bdc319875b1
+  image_id: sha256:45497be8403c403fbc360e35bfe4ea33a57f680692800097d581f5996d1c2f0f
+  published_at: "2026-09-15"
+
 sources:
   phanthymotus:
     upstream: https://github.com/NBStarry/phanthymotus.git

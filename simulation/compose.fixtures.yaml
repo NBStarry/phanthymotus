@@ -1,0 +1,9 @@
+# Opt-in overlay for the simulation Driver, not for the public application stack.
+services:
+  sim-driver:
+    environment:
+      SIM_AUDIO_FIXTURE: ${SIM_AUDIO_FIXTURE:-}
+      SIM_AUDIO_SILENCE_MS: ${SIM_AUDIO_SILENCE_MS:-5000}
+      SIM_IMAGE_FIXTURE: ${SIM_IMAGE_FIXTURE:-}
+    volumes:
+      - ${SIM_FIXTURE_DIR:?set directory containing licensed test media}:/fixtures:ro

@@ -1,0 +1,9 @@
+# Opt-in public OCR compatibility candidate; preserve other model volumes.
+services:
+  perception:
+    volumes:
+      - ocr-cpu-models:/models/ocr-candidate
+volumes:
+  ocr-cpu-models:
+    external: true
+    name: sim-ocr-onnx-candidate-models

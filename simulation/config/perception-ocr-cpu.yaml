@@ -1,0 +1,51 @@
+# Opt-in OCR CPU candidate. Core and ActuCore remain unchanged.
+mcp_port: 15720
+file_intake:
+  dir: /models/uploads
+  max_bytes: 67108864
+  retention_days: 7
+plugins:
+  asr:
+    enabled: true
+    asr_model: sensevoice-small
+    device: cpu
+    num_threads: 2
+    warmup: true
+    vad:
+      model: sherpa_onnx
+      threshold: 0.5
+      silence_ms: 400
+      pre_roll_ms: 500
+    kws:
+      enabled: false
+      trigger_mode: vad
+  tts:
+    enabled: true
+    engine: matcha-zh-en
+    model_dir: /models/sherpa-onnx/tts
+    device: cpu
+    speaker_id: 0
+    speed: 1.0
+    warmup: true
+  vop:
+    enabled: true
+    namespace: phanthymotus_sim_perception
+    model: yolov8s-worldv2
+    confidence: 0.3
+    classes: [person, bus, car, dog]
+    fps: 1
+  face_recognition:
+    enabled: true
+    model_dir: /models/face/buffalo_sc
+    db_dir: /models/sim-face-db
+    device: cpu
+    num_threads: 2
+    warmup: true
+    detect_fps: 1.0
+  ocr:
+    enabled: true
+    provider: rapidocr
+    backend: onnx-cpu
+    model_dir: /models/ocr-candidate/ocr/ppocrv6-small-onnx
+    use_angle_cls: true
+    min_interval_ms: 1000

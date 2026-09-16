@@ -12,11 +12,6 @@ COPY actucore/config.yaml /work/config.yaml
 COPY actucore/deploy/ /deploy/
 COPY perception/utils/logsafe.py /work/logsafe.py
 
-# Production uses host networking. The simulation bridge needs a reachable
-# advertised address while keeping the upstream application source unchanged.
-RUN sed -i 's|"url":  f"http://localhost:{mcp_port}/mcp"|"url":  os.environ.get("MCP_ADVERTISE_URL", f"http://localhost:{mcp_port}/mcp")|' /work/main.py && \
-    grep -F 'MCP_ADVERTISE_URL' /work/main.py
-
 ARG SOURCE_REVISION=unknown
 LABEL org.opencontainers.image.revision=${SOURCE_REVISION}
 ENV PYTHONUNBUFFERED=1 \

@@ -12,7 +12,7 @@ SOURCE_DIR="${PLATFORM_SOURCE_DIR:?set PLATFORM_SOURCE_DIR to a clean 4paradigm/
 REVISION="${PLATFORM_REVISION:-$(git -C "$SOURCE_DIR" rev-parse HEAD)}"
 SHORT="${REVISION:0:12}"
 REGISTRY="${TCR_REGISTRY:-bj-warehouse.tencentcloudcr.com/phanthy-motus}"
-TAG="sim-main-${SHORT}-amd64"
+TAG="${PLATFORM_IMAGE_TAG:-sim-main-${SHORT}-amd64}"
 ROS_BASE_IMAGE="${ROS_BASE_IMAGE:-phanthymotus-sim/ros-base:humble-amd64}"
 BUILD_PROXY="${BUILD_PROXY:-}"
 
@@ -30,9 +30,6 @@ prepare_context() {
   CONTEXT="$(mktemp -d)"
   trap 'rm -rf "$CONTEXT"' EXIT
   git -C "$SOURCE_DIR" archive "$REVISION" | tar -x -C "$CONTEXT"
-  mkdir -p "$CONTEXT/simulation/config" "$CONTEXT/agent-core/tests"
-  cp "$RUNTIME_ROOT/config/perception-p0.yaml" "$CONTEXT/simulation/config/"
-  cp "$RUNTIME_ROOT/../agent-core/tests/test_local_services.py" "$CONTEXT/agent-core/tests/"
 }
 
 build_one() {
@@ -49,6 +46,9 @@ build() {
   build_one "$RUNTIME_ROOT/docker/agent-core.Dockerfile" "$CORE_IMAGE"
   build_one "$RUNTIME_ROOT/docker/perception.Dockerfile" "$PERCEPTION_IMAGE"
   build_one "$RUNTIME_ROOT/docker/actucore.Dockerfile" "$ACTUCORE_IMAGE"
+  python3 "$RUNTIME_ROOT/scripts/verify-platform-sources.py" "$SOURCE_DIR" "$REVISION" agent-core "$CORE_IMAGE"
+  python3 "$RUNTIME_ROOT/scripts/verify-platform-sources.py" "$SOURCE_DIR" "$REVISION" perception "$PERCEPTION_IMAGE"
+  python3 "$RUNTIME_ROOT/scripts/verify-platform-sources.py" "$SOURCE_DIR" "$REVISION" actucore "$ACTUCORE_IMAGE"
   docker image inspect "$CORE_IMAGE" "$PERCEPTION_IMAGE" "$ACTUCORE_IMAGE" >/dev/null
   printf 'BUILD PASS revision=%s\n%s\n%s\n%s\n' "$REVISION" "$CORE_IMAGE" "$PERCEPTION_IMAGE" "$ACTUCORE_IMAGE"
 }

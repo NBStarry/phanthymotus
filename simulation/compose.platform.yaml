@@ -1,0 +1,92 @@
+# Public application sources are unmodified. Share localhost rather than patch
+# their registration URLs. The simulation Driver remains on sim-net separately.
+name: phanthymotus-sim-public
+x-runtime: &runtime
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: local
+    options:
+      max-size: 10m
+      max-file: "3"
+services:
+  agent-core:
+    <<: *runtime
+    ipc: shareable
+    image: ${CORE_IMAGE:?set verified Core image}
+    container_name: phanthymotus-sim-p0-agent-core
+    pids_limit: 256
+    ports:
+      - "127.0.0.1:16678:15678"
+      - "127.0.0.1:16720:15720"
+      - "127.0.0.1:16721:15721"
+      - "127.0.0.1:16740:15730"
+    environment:
+      DB_PATH: /work/resource/data.db
+      ROS_DOMAIN_ID: "83"
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      COMPOSE_DIR: /opt/phanthy-motus
+      CONTAINER_NAME: phanthymotus-sim-p0-agent-core
+      CONTAINER_NETWORK: phanthymotus-sim-p0-net
+      HTTP_PROXY: ${PHANTHY_SIM_RUNTIME_PROXY:-}
+      HTTPS_PROXY: ${PHANTHY_SIM_RUNTIME_PROXY:-}
+      NO_PROXY: localhost,127.0.0.1,agent-core,sim-driver,gazebo-nav
+    volumes:
+      - core-resource:/work/resource
+      - core-compose:/opt/phanthy-motus
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - sim-net
+    cpus: 2
+    mem_limit: 2g
+  perception:
+    <<: *runtime
+    image: ${PERCEPTION_IMAGE:?set verified Perception image}
+    container_name: phanthymotus-sim-p0-perception
+    pids_limit: 512
+    network_mode: service:agent-core
+    ipc: service:agent-core
+    depends_on:
+      - agent-core
+    environment:
+      AGENT_CORE_URL: https://127.0.0.1:15678
+      CONFIG_PATH: /work/config.yaml
+      ROS_DOMAIN_ID: "83"
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+    volumes:
+      - perception-models:/models
+      # Upstream VOP expects CLIP under /work/weights/clip, not /models/clip.
+      - perception-models:/work/weights
+      - ${PERCEPTION_CONFIG:?set validated CPU/GPU card configuration}:/work/config.yaml:ro
+    cpus: 4
+    mem_limit: 8g
+  actucore:
+    <<: *runtime
+    image: ${ACTUCORE_IMAGE:?set verified ActuCore image}
+    container_name: phanthymotus-sim-robo-value-actucore
+    pids_limit: 256
+    network_mode: service:agent-core
+    ipc: service:agent-core
+    depends_on:
+      - agent-core
+    environment:
+      AGENT_CORE_URL: https://127.0.0.1:15678
+      ROS_DOMAIN_ID: "83"
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+    cpus: 2
+    mem_limit: 2g
+networks:
+  sim-net:
+    external: true
+    name: phanthymotus-sim-p0-net
+volumes:
+  core-resource:
+    external: true
+    name: phanthymotus-sim-p0-core-resource
+  core-compose:
+    external: true
+    name: phanthymotus-sim-p0-core-compose
+  perception-models:
+    external: true
+    name: phanthymotus-sim-p0-perception-models

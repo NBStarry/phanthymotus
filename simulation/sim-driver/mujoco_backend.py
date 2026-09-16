@@ -66,6 +66,45 @@ def _quat_to_rpy(quaternion: np.ndarray) -> tuple[float, float, float]:
     return roll, pitch, yaw
 
 
+def _add_perception_room(spec) -> None:
+    """Self-authored metric furniture, with collision geometry; no photo billboards."""
+    def box(name, position, half_size, color):
+        spec.worldbody.add_geom(name='sim_room_' + name,
+                                type=mujoco.mjtGeom.mjGEOM_BOX,
+                                pos=position, size=half_size, rgba=color)
+
+    wood = [.48, .25, .10, 1]
+    metal = [.15, .17, .19, 1]
+    box('back_wall', [5, 0, 1.5], [.05, 4, 1.5], [.8, .8, .75, 1])
+    box('table_top', [3, .65, .75], [.65, .45, .04], wood)
+    for x in (-.55, .55):
+        for y in (-.35, .35):
+            box(f'table_leg_{x}_{y}', [3+x, .65+y, .355], [.04, .04, .355], metal)
+    box('chair_seat', [2, -.65, .45], [.25, .25, .04], wood)
+    box('chair_back', [2.23, -.65, .77], [.035, .25, .3], wood)
+    for x in (-.2, .2):
+        for y in (-.2, .2):
+            box(f'chair_leg_{x}_{y}', [2+x, -.65+y, .205], [.025, .025, .205], metal)
+
+    # A wall sign in world coordinates, not text overlaid on camera frames.
+    from PIL import Image, ImageDraw, ImageFont
+    sign = Image.new('RGB', (512, 128), 'white')
+    ImageDraw.Draw(sign).text((256, 64), 'SIM ROOM', fill='black', anchor='mm',
+                             font=ImageFont.load_default(size=80))
+    texture = spec.add_texture(name='sim_room_sign', type=mujoco.mjtTexture.mjTEXTURE_2D,
+                               width=512, height=128, nchannel=3)
+    texture.data = sign.tobytes()
+    material = spec.add_material(name='sim_room_sign_material', texuniform=False,
+                                  texrepeat=[1, 1])
+    material.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB] = 'sim_room_sign'
+    orientation = np.zeros(4)
+    mujoco.mju_mat2Quat(orientation, np.array([0, 0, -1, -1, 0, 0, 0, 1, 0], dtype=float))
+    spec.worldbody.add_geom(name='sim_room_sign', type=mujoco.mjtGeom.mjGEOM_PLANE,
+                            pos=[4.94, 0, 1.65], size=[1.5, .375, .01],
+                            quat=orientation, material='sim_room_sign_material',
+                            contype=0, conaffinity=0)
+
+
 class MujocoSimulationState:
     """Thread-safe G1 physics state using the locked official MJCF model."""
 
@@ -78,6 +117,7 @@ class MujocoSimulationState:
         clock: Callable[[], float] = time.monotonic,
         seed: int = 7,
         timestep: float = 0.002,
+        camera_enabled: bool = False,
     ):
         self._clock = clock
         self._lock = threading.RLock()
@@ -85,7 +125,18 @@ class MujocoSimulationState:
         self._model_path = Path(model_path).resolve()
         if not self._model_path.is_file():
             raise FileNotFoundError(f"MuJoCo G1 scene not found: {self._model_path}")
-        self._model = mujoco.MjModel.from_xml_path(str(self._model_path))
+        self.camera_enabled = camera_enabled
+        self._camera_renderer = None
+        if camera_enabled:
+            spec = mujoco.MjSpec.from_file(str(self._model_path))
+            _add_perception_room(spec)
+            # Approximate torso mount, not a calibrated physical G1 camera.
+            spec.body('torso_link').add_camera(
+                name='sim_rgb', pos=[.12, 0, .35],
+                xyaxes=[0, -1, 0, 0, 0, 1], fovy=65)
+            self._model = spec.compile()
+        else:
+            self._model = mujoco.MjModel.from_xml_path(str(self._model_path))
         self._model.opt.timestep = float(timestep)
         self._data = mujoco.MjData(self._model)
         self._timestep = float(self._model.opt.timestep)
@@ -139,6 +190,22 @@ class MujocoSimulationState:
         self._right_foot_bodies = self._descendants("right_ankle_roll_link")
         self._contact_force = np.zeros(6, dtype=np.float64)
         self._reset_data()
+
+    def render_camera(self) -> np.ndarray:
+        """Called only by the camera worker; GL context stays on that thread."""
+        if not self.camera_enabled:
+            raise RuntimeError('MuJoCo camera is not enabled')
+        if self._camera_renderer is None:
+            self._camera_renderer = mujoco.Renderer(self._model, height=240, width=320)
+        with self._lock:
+            self._camera_renderer.update_scene(self._data, camera='sim_rgb')
+        # update_scene copies geometry; do not block physics during rasterization.
+        return self._camera_renderer.render().copy()
+
+    def close_camera(self) -> None:
+        if self._camera_renderer is not None:
+            self._camera_renderer.close()
+            self._camera_renderer = None
 
     def _descendants(self, root_name: str) -> set[int]:
         root = self._model.body(root_name).id

@@ -1,0 +1,36 @@
+--- a/rclpy/executors.py
++++ b/rclpy/executors.py
+@@ -475,7 +475,18 @@
+                     pass
+                 return
+             with work_tracker:
+-                arg = take_from_wait_list(entity)
++                try:
++                    arg = take_from_wait_list(entity)
++                except InvalidHandle:
++                    # Entity was destroyed after selection, before taking data.
++                    # Release the group; do not suppress user callback errors.
++                    entity._executor_event = False
++                    entity.callback_group.ending_execution(entity)
++                    try:
++                        gc.trigger()
++                    except InvalidHandle:
++                        pass
++                    return
+
+                 # Signal that this has been 'taken' and can be added back to the wait list
+                 entity._executor_event = False
+@@ -671,6 +682,11 @@
+                 for gc_handle in guard_handles:
+                     wait_set.add_guard_condition(gc_handle)
+-                for waitable in waitables:
+-                    waitable.add_to_wait_set(wait_set)
++                for waitable in list(waitables):
++                    try:
++                        waitable.add_to_wait_set(wait_set)
++                    except InvalidHandle:
++                        # A nested handle entry may fail after outer acquisition.
++                        # Exclude it from is_ready checks as well as the wait set.
++                        waitables.remove(waitable)
+
+                 # Wait for something to become ready

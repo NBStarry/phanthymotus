@@ -1,6 +1,10 @@
 ARG ROS_BASE_IMAGE=phanthymotus-sim/ros-base:humble-amd64
 FROM ${ROS_BASE_IMAGE}
 
+RUN apt-get update -o Acquire::Retries=3 && \
+    apt-get install -y --no-install-recommends ffmpeg python3-dbus && \
+    rm -rf /var/lib/apt/lists/*
+
 ARG PYPI_MIRROR=https://nexus.4pd.io/repository/pypi-all/simple/
 ARG DOCKER_VERSION=27.5.1
 ARG DOCKER_STATIC_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/static/stable/x86_64
@@ -40,10 +44,10 @@ RUN echo "/opt/ros/humble/lib/python3.10/site-packages" >> .venv/lib/python3.10/
 
 COPY agent-core/web/ /work/web/
 COPY agent-core/src/ /work/src/
+COPY agent-core/tools/ /work/tools/
 COPY agent-core/resource/ /work/resource/
 COPY agent-core/deploy/ /deploy/
 COPY agent-core/resource/memory/defaults/ /opt/defaults/memory/
-COPY agent-core/tests/test_local_services.py /work/tests/test_local_services.py
 
 ARG SOURCE_REVISION=unknown
 LABEL org.opencontainers.image.revision=${SOURCE_REVISION}

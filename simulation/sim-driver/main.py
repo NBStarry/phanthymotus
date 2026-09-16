@@ -36,6 +36,7 @@ from std_msgs.msg import String
 from PIL import Image, ImageDraw
 
 from state import FAULT_MODES, SimulationState
+from media_fixture import MediaFixture
 
 
 MCP_PORT = int(os.environ.get("MCP_PORT", "15730"))
@@ -102,6 +103,18 @@ class SimPublisherNode(Node):
         self._active_lock = threading.RLock()
         self._audio_phase = 0.0
         self._metrics = {name: 0 for name in TOPICS}
+        self._world_camera = getattr(state, 'camera_enabled', False)
+        self._camera_error = ''
+        self._camera_stop = threading.Event()
+        self._camera_thread = None
+        if self._world_camera and os.environ.get('SIM_IMAGE_FIXTURE'):
+            raise ValueError('MuJoCo camera and SIM_IMAGE_FIXTURE are mutually exclusive')
+        self._fixtures = {}
+        for name, kind, variable in (("mic", "audio", "SIM_AUDIO_FIXTURE"),
+                                     ("camera_rgb", "image", "SIM_IMAGE_FIXTURE")):
+            if os.environ.get(variable):
+                silence_ms = int(os.environ.get('SIM_AUDIO_SILENCE_MS', '0')) if kind == 'audio' else 0
+                self._fixtures[name] = MediaFixture(os.environ[variable], kind, silence_ms=silence_ms)
 
         self._mic_pub = self.create_publisher(AudioChunk, TOPICS["mic"], LOW_LATENCY_QOS)
         self._camera_pub = self.create_publisher(CompressedImage, TOPICS["camera_rgb"], LOW_LATENCY_QOS)
@@ -114,10 +127,51 @@ class SimPublisherNode(Node):
         self.create_timer(1.0, self._publish_battery)
         self.create_timer(0.2, self._publish_camera)
         self.create_timer(0.032, self._publish_audio)
+        if self._world_camera:
+            self._camera_thread = threading.Thread(target=self._camera_loop,
+                                                   name='sim-camera', daemon=True)
+            self._camera_thread.start()
+
+    def _camera_loop(self) -> None:
+        try:
+            # Initialize and destroy the GL context on this same worker thread.
+            self.state.render_camera()
+            while not self._camera_stop.wait(.2):
+                if not self.is_active('camera_rgb') or self.state.snapshot()['fault_mode'] == 'drop_camera':
+                    continue
+                stamp = self.get_clock().now().to_msg()
+                pixels = self.state.render_camera()
+                encoded = BytesIO()
+                Image.fromarray(pixels).save(encoded, format='JPEG', quality=82)
+                message = CompressedImage()
+                message.header.stamp = stamp
+                message.header.frame_id = 'sim_torso_camera'
+                message.format = 'jpeg'
+                message.data = encoded.getvalue()
+                with self._active_lock:
+                    if 'camera_rgb' in self._active and not self._camera_stop.is_set():
+                        self._camera_pub.publish(message)
+                        self._metrics['camera_rgb'] += 1
+        except Exception as exc:
+            self._camera_error = f'{type(exc).__name__}: {exc}'
+            self.get_logger().error(f'MuJoCo camera failed: {self._camera_error}')
+        finally:
+            self.state.close_camera()
+
+    def stop_camera_worker(self) -> None:
+        self._camera_stop.set()
+        if self._camera_thread:
+            self._camera_thread.join(timeout=10)
+            if self._camera_thread.is_alive():
+                raise RuntimeError('Camera worker did not stop; refusing to destroy live ROS publisher')
 
     def set_active(self, name: str, active: bool) -> None:
         with self._active_lock:
             if active:
+                if name == 'camera_rgb' and self._camera_error:
+                    raise RuntimeError(self._camera_error)
+                if name not in self._active and name in self._fixtures:
+                    self._fixtures[name].offset = 0
                 self._active.add(name)
             else:
                 self._active.discard(name)
@@ -130,6 +184,11 @@ class SimPublisherNode(Node):
         return {
             "active": self.is_active(name),
             "published": self._metrics.get(name, 0),
+            "input_source": ({"source": "mujoco_render", "mount": "torso_link",
+                              "calibrated": False, "width": 320, "height": 240, "fovy_deg": 65}
+                             if name == 'camera_rgb' and self._world_camera else
+                             self._fixtures[name].info if name in self._fixtures else {"source": "generated_simulation"}),
+            "last_error": self._camera_error if name == 'camera_rgb' else '',
         }
 
     @staticmethod
@@ -157,6 +216,8 @@ class SimPublisherNode(Node):
         self._metrics["battery"] += 1
 
     def _publish_camera(self) -> None:
+        if self._world_camera:
+            return
         if not self.is_active("camera_rgb") or self.state.snapshot()["fault_mode"] == "drop_camera":
             return
         snapshot = self.state.snapshot()
@@ -187,7 +248,10 @@ class SimPublisherNode(Node):
         message.header.stamp = self.get_clock().now().to_msg()
         message.header.frame_id = "sim_camera"
         message.format = "jpeg"
-        message.data = list(encoded.getvalue())
+        fixture = self._fixtures.get("camera_rgb")
+        message.data = list(fixture.data if fixture else encoded.getvalue())
+        if fixture:
+            message.header.frame_id = "sim_fixture_camera"
         self._camera_pub.publish(message)
         self._metrics["camera_rgb"] += 1
 
@@ -205,9 +269,14 @@ class SimPublisherNode(Node):
         if sys.byteorder != "little":
             samples.byteswap()
         payload = samples.tobytes()
+        fixture = self._fixtures.get("mic")
+        if fixture:
+            payload = fixture.audio_chunk()
         message = AudioChunk()
         message.header.stamp = self.get_clock().now().to_msg()
         message.header.frame_id = "sim_mic"
+        if fixture:
+            message.header.frame_id = "sim_fixture_mic"
         message.format = "audio/pcm-16k"
         message.data = list(payload)
         self._mic_pub.publish(message)
@@ -293,8 +362,8 @@ class SimG1Bundle:
             )
 
         tools = [
-            self._sensor_tool("mic", "deterministic PCM_S16_LE 16000 Hz mono tone fixture"),
-            self._sensor_tool("camera_rgb", "deterministic 640x360 JPEG scene with live backend pose"),
+            self._sensor_tool("mic", "PCM_S16_LE 16000 Hz mono: generated tone or explicit WAV fixture replay"),
+            self._sensor_tool("camera_rgb", "MuJoCo torso camera, generated pose JPEG, or explicit image fixture replay; input_source identifies the mode"),
             self._sensor_tool("imu", imu_description),
             self._sensor_tool("battery", "deterministic BMS telemetry JSON"),
             self._sensor_tool("joints", joints_description),
@@ -419,10 +488,12 @@ class SimG1Bundle:
                 return None
             metrics = self.node.metrics(name)
             return {
-                "state": "running" if metrics["active"] else "idle",
+                "state": "error" if metrics.get('last_error') else "running" if metrics["active"] else "idle",
+                "last_error": metrics.get('last_error', ''),
                 "simulation": True,
                 "simulation_backend": self.backend_name,
                 "published": metrics["published"],
+                "input_source": metrics["input_source"],
                 "topic_out": [{"topic": TOPICS[name], "format": FORMATS[name]}],
             }
 
@@ -644,6 +715,11 @@ def _start_registration() -> None:
 
 def main() -> None:
     global bundle
+    camera_mode = os.environ.get('SIM_CAMERA_MODE', 'generated')
+    if camera_mode not in ('generated', 'mujoco'):
+        raise ValueError('SIM_CAMERA_MODE must be generated or mujoco')
+    if camera_mode == 'mujoco' and SIMULATION_BACKEND != 'mujoco':
+        raise ValueError('MuJoCo camera requires the MuJoCo physics backend')
     urdf, joint_names = _load_model(URDF_PATH)
     rclpy.init()
     if SIMULATION_BACKEND == "protocol":
@@ -654,6 +730,7 @@ def main() -> None:
         state = MujocoSimulationState(
             MUJOCO_MODEL_PATH,
             seed=int(os.environ.get("SIM_SEED", "7")),
+            camera_enabled=camera_mode == 'mujoco',
         )
     else:
         raise ValueError(f"SIMULATION_BACKEND must be protocol or mujoco, got {SIMULATION_BACKEND!r}")
@@ -675,11 +752,13 @@ def main() -> None:
     try:
         executor.spin()
     finally:
-        state.stop_move()
-        if hasattr(state, "stop_gesture"):
+        if SIMULATION_BACKEND == "mujoco":
             state.stop_gesture()
+        else:
+            state.stop_move()
         server.shutdown()
         executor.shutdown()
+        node.stop_camera_worker()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
