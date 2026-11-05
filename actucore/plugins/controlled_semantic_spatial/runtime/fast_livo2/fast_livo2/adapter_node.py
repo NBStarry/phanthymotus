@@ -43,6 +43,7 @@ from .map_datum import (
     DEFAULT_DATUM_TOLERANCE_M,
     DatumError,
     check_datum,
+    datum_delta,
     estimate_ground_z,
     floor_in_band_fraction,
 )
@@ -134,6 +135,15 @@ class FastLivo2Adapter(Node):
         self.declare_parameter("obstacle_min_height_m", -0.30)
         self.declare_parameter("obstacle_max_height_m", 0.30)
         self.declare_parameter("map_datum_tolerance_m", DEFAULT_DATUM_TOLERANCE_M)
+        self._saved_map_datum = None
+        self._datum_watchdog = {
+            "known": False,
+            "saved_ground_z_m": None,
+            "session_ground_z_m": None,
+            "delta_m": None,
+            "floor_in_band_fraction": None,
+            "tolerance_m": DEFAULT_DATUM_TOLERANCE_M,
+        }
 
         self._source_max_age = float(self.get_parameter("source_max_age_sec").value)
         self._mapper_runtime_max_age = float(
@@ -1642,6 +1652,36 @@ class FastLivo2Adapter(Node):
                 }
                 self._invalidate_map_view_cache_locked()
             raise
+        # Watchdog: how much of the ground sits inside the obstacle band right
+        # now. Near zero is healthy; a datum slip drives it towards 1.0 and the
+        # planner starts treating the floor as an obstacle.
+        saved_ground = None
+        saved_datum = getattr(self, "_saved_map_datum", None)
+        if isinstance(saved_datum, dict):
+            saved_ground = saved_datum.get("ground_z_m")
+        fraction = None
+        lock = getattr(self, "_static_lock", None)
+        static_map = getattr(self, "_static_map", None)
+        if lock is not None and static_map is not None:
+            try:
+                with lock:
+                    static_sample = static_map.confirmed_points
+                fraction = floor_in_band_fraction(
+                    static_sample,
+                    session_ground_z,
+                    self._obstacle_min_height,
+                    self._obstacle_max_height,
+                )
+            except AttributeError:
+                fraction = None
+        self._datum_watchdog = {
+            "known": saved_ground is not None and session_ground_z is not None,
+            "saved_ground_z_m": saved_ground,
+            "session_ground_z_m": session_ground_z,
+            "delta_m": datum_delta,
+            "floor_in_band_fraction": fraction,
+            "tolerance_m": self._datum_tolerance_m(),
+        }
         match = {
             "accepted": True,
             "match_ratio": result.match_ratio,
@@ -1998,6 +2038,7 @@ class FastLivo2Adapter(Node):
             "unmatched_static_cloud": state["unmatched_static_cloud"],
             "mapping_work_dropped": mapping_work_dropped,
             "static_map_error": state["static_map_error"],
+            "map_datum": dict(getattr(self, "_datum_watchdog", {})),
             "map_view_max_point_count": _MAP_VIEW_MAX_POINTS,
             "map_view_enabled": state["map_view_enabled"],
             "map_view_point_refresh_hz": 1.0,
