@@ -1265,6 +1265,15 @@ class FastLivo2Adapter(Node):
             "map_view_enabled": map_view_enabled,
         }
 
+    def _datum_tolerance_m(self) -> float:
+        getter = getattr(self, "get_parameter", None)
+        if getter is not None:
+            try:
+                return float(getter("map_datum_tolerance_m").value)
+            except (AttributeError, KeyError, TypeError, ValueError):
+                pass
+        return DEFAULT_DATUM_TOLERANCE_M
+
     def _save_static_map(self, args: dict) -> dict:
         self._require_map_control_deadline(args, stage="static map save")
         map_name = str(args.get("map_name", "")).strip()
@@ -1576,9 +1585,7 @@ class FastLivo2Adapter(Node):
             datum_delta = check_datum(
                 saved_ground,
                 session_ground_z,
-                tolerance_m=float(
-                    self.get_parameter("map_datum_tolerance_m").value
-                ),
+                tolerance_m=self._datum_tolerance_m(),
             )
         except DatumError as exc:
             raise InvalidFastLivo2Frame(str(exc)) from exc
