@@ -39,6 +39,13 @@ from std_msgs.msg import String, UInt8MultiArray
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 
 from .fault_diagnostics import SENSOR_REJECTION_TOPIC
+from .map_datum import (
+    DEFAULT_DATUM_TOLERANCE_M,
+    DatumError,
+    check_datum,
+    estimate_ground_z,
+    floor_in_band_fraction,
+)
 from .frame_adapter_core import (
     InvalidFastLivo2Frame,
     OdomHealthMonitor,
@@ -81,6 +88,19 @@ def _stamp_ns(stamp) -> int:
     return int(stamp.sec) * 1_000_000_000 + int(stamp.nanosec)
 
 
+def _read_map_datum(pcd_path):
+    """Read the datum sidecar saved next to a static map, if it exists."""
+
+    path = Path(pcd_path).with_suffix(".datum.json")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
 class FastLivo2Adapter(Node):
     def __init__(self) -> None:
         super().__init__("fast_livo2_adapter")
@@ -113,6 +133,7 @@ class FastLivo2Adapter(Node):
         self.declare_parameter("static_pose_match_tolerance_sec", 0.05)
         self.declare_parameter("obstacle_min_height_m", -0.30)
         self.declare_parameter("obstacle_max_height_m", 0.30)
+        self.declare_parameter("map_datum_tolerance_m", DEFAULT_DATUM_TOLERANCE_M)
 
         self._source_max_age = float(self.get_parameter("source_max_age_sec").value)
         self._mapper_runtime_max_age = float(
@@ -1294,6 +1315,23 @@ class FastLivo2Adapter(Node):
         if destination.parent != static_root:
             raise InvalidFastLivo2Frame("static map path escaped map root")
         count = write_pcd_xyz_atomic(destination, points)
+        # A saved map is only meaningful together with the height frame it was
+        # built in: without it a later session cannot tell whether the obstacle
+        # band still cuts the floor or has shifted onto it.
+        ground = estimate_ground_z(points)
+        datum = {
+            "ground_z_m": None if ground is None else ground.z_m,
+            "ground_points": None if ground is None else ground.points,
+            "ground_thickness_m": None if ground is None else ground.thickness_m,
+            "obstacle_height_range_m": [minimum, maximum],
+            "saved_at_ns": time.time_ns(),
+            "schema": "phanthy.navigation.map_datum.v1",
+        }
+        datum_path = destination.with_suffix(".datum.json")
+        try:
+            datum_path.write_text(json.dumps(datum, sort_keys=True), encoding="utf-8")
+        except OSError:
+            datum = dict(datum, write_error=True)
         try:
             self._require_map_control_deadline(
                 args,
@@ -1312,6 +1350,7 @@ class FastLivo2Adapter(Node):
             "static_map_file": filename,
             "static_point_count": count,
             "obstacle_height_range_m": [minimum, maximum],
+            "map_datum": datum,
             "temporal_filter": (
                 "spatial_shard_motion_gate_with_multi_frame_hits_and_"
                 "free_ray_clearing_v3"
@@ -1391,6 +1430,8 @@ class FastLivo2Adapter(Node):
                     "the active card configuration; restore the saved range "
                     "or rebuild the map"
                 )
+            saved_datum = _read_map_datum(resolved_static)
+            self._saved_map_datum = saved_datum
             static_loaded = VoxelMap(
                 float(self.get_parameter("map_voxel_size_m").value)
             )
@@ -1493,6 +1534,10 @@ class FastLivo2Adapter(Node):
             "static_map_source": static_source,
             "map_view_context_point_count": map_view_context.point_count,
             "obstacle_height_range_m": list(active_height_range),
+            "map_datum": saved_datum,
+            "datum_known": bool(
+                saved_datum and saved_datum.get("ground_z_m") is not None
+            ),
             "localization_state": "awaiting_relocalization",
         }
 
@@ -1518,6 +1563,25 @@ class FastLivo2Adapter(Node):
             map_name = self._session_name
         if session_pose is None or not session_frames:
             raise InvalidFastLivo2Frame("FAST-LIVO2 odom and registered cloud are not ready")
+        # The planar solver never estimates Z, so a session that starts at a
+        # different height silently shifts the whole map underneath the fixed
+        # obstacle band. Compare the two ground heights before solving.
+        saved_ground = None
+        saved_datum = getattr(self, "_saved_map_datum", None)
+        if isinstance(saved_datum, dict):
+            saved_ground = saved_datum.get("ground_z_m")
+        session_ground = estimate_ground_z(tuple(chain.from_iterable(session_frames)))
+        session_ground_z = None if session_ground is None else session_ground.z_m
+        try:
+            datum_delta = check_datum(
+                saved_ground,
+                session_ground_z,
+                tolerance_m=float(
+                    self.get_parameter("map_datum_tolerance_m").value
+                ),
+            )
+        except DatumError as exc:
+            raise InvalidFastLivo2Frame(str(exc)) from exc
         if odom_age is None or cloud_age is None or max(odom_age, cloud_age) > self._source_max_age:
             raise InvalidFastLivo2Frame("FAST-LIVO2 odom or registered cloud is stale")
         session_points = np.concatenate(
