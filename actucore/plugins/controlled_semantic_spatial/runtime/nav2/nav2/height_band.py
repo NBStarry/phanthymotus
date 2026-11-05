@@ -46,6 +46,76 @@ def apply_obstacle_height_band(config: dict, minimum: float, maximum: float) -> 
         target["max_obstacle_height"] = float(maximum)
 
 
+def footprint_inscribed_radius(config: dict, name: str) -> float:
+    """Inscribed radius of the configured footprint for one costmap.
+
+    Nav2 accepts either ``robot_radius`` (a circle) or ``footprint`` (a polygon
+    as a string). The inscribed radius is the shortest distance from the origin
+    to a footprint edge; an inflation radius below it produces no cost gradient
+    at all, which silently turns the costmap into lethal/inscribed/free only.
+    """
+
+    try:
+        params = config[name][name]["ros__parameters"]
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f"{name} must define ros__parameters") from exc
+    radius = params.get("robot_radius")
+    if isinstance(radius, (int, float)) and not isinstance(radius, bool):
+        if not math.isfinite(radius) or radius <= 0:
+            raise ValueError(f"{name} robot_radius must be finite and positive")
+        return float(radius)
+    raw = params.get("footprint")
+    if raw is None:
+        raise ValueError(f"{name} must define robot_radius or footprint")
+    points = raw
+    if isinstance(raw, str):
+        try:
+            import json
+            points = json.loads(raw)
+        except ValueError as exc:
+            raise ValueError(f"{name} footprint is not valid JSON") from exc
+    if not isinstance(points, (list, tuple)) or len(points) < 3:
+        raise ValueError(f"{name} footprint must contain at least three points")
+    try:
+        vertices = [(float(x), float(y)) for x, y in points]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} footprint points must be numeric pairs") from exc
+    inside = point_in_polygon(0.0, 0.0, vertices)
+    best = math.inf
+    for index, (x1, y1) in enumerate(vertices):
+        x2, y2 = vertices[(index + 1) % len(vertices)]
+        best = min(best, distance_to_segment(0.0, 0.0, x1, y1, x2, y2))
+    if not inside:
+        # The origin outside the footprint means the polygon does not describe
+        # the robot body; the distance to an edge is not an inscribed radius.
+        raise ValueError(f"{name} footprint does not contain the robot origin")
+    if not math.isfinite(best) or best <= 0:
+        raise ValueError(f"{name} footprint inscribed radius is invalid")
+    return best
+
+
+def point_in_polygon(x, y, vertices):
+    inside = False
+    count = len(vertices)
+    for index in range(count):
+        x1, y1 = vertices[index]
+        x2, y2 = vertices[(index + 1) % count]
+        if (y1 > y) != (y2 > y):
+            crossing = x1 + (y - y1) * (x2 - x1) / (y2 - y1)
+            if x < crossing:
+                inside = not inside
+    return inside
+
+
+def distance_to_segment(px, py, x1, y1, x2, y2):
+    dx, dy = x2 - x1, y2 - y1
+    if dx == 0 and dy == 0:
+        return math.hypot(px - x1, py - y1)
+    t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
+    t = max(0.0, min(1.0, t))
+    return math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
+
+
 def apply_inflation_radius(config: dict, radius: float) -> None:
     """Set only the two inflation layers, including missing legacy radius leaves.
 
@@ -67,6 +137,15 @@ def apply_inflation_radius(config: dict, radius: float) -> None:
                 or "inflation_layer" not in plugins
                 or layer.get("plugin") != "nav2_costmap_2d::InflationLayer"):
             raise ValueError(f"{name} must use the standard InflationLayer")
+        inscribed = footprint_inscribed_radius(config, name)
+        if float(radius) <= inscribed:
+            raise ValueError(
+                f"{name} inflation_radius {float(radius):.2f} m does not exceed the "
+                f"footprint inscribed radius {inscribed:.2f} m; Nav2 produces no "
+                "cost gradient in that case, so the costmap collapses to "
+                "lethal/inscribed/free and goals inside the inscribed band look "
+                "covered by obstacles"
+            )
         targets.append(layer)
     for layer in targets:
         layer["inflation_radius"] = float(radius)

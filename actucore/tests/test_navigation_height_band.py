@@ -306,3 +306,62 @@ class InflationRadiusLaunchTest(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class InflationRadiusGuardTest(unittest.TestCase):
+    """A radius below the footprint inscribed radius collapses the costmap."""
+
+    def _config(self, footprint='[[0.32, 0.28], [0.32, -0.28], [-0.32, -0.28], [-0.32, 0.28]]'):
+        return {
+            "local_costmap": {"local_costmap": {"ros__parameters": {
+                "footprint": footprint,
+                "plugins": ["obstacle_layer", "inflation_layer"],
+                "inflation_layer": {"plugin": "nav2_costmap_2d::InflationLayer",
+                                    "inflation_radius": 0.55},
+            }}},
+            "global_costmap": {"global_costmap": {"ros__parameters": {
+                "footprint": footprint,
+                "plugins": ["static_layer", "obstacle_layer", "inflation_layer"],
+                "inflation_layer": {"plugin": "nav2_costmap_2d::InflationLayer",
+                                    "inflation_radius": 0.55},
+            }}},
+        }
+
+    def test_shipped_footprint_inscribed_radius(self):
+        from nav2.height_band import footprint_inscribed_radius
+        self.assertAlmostEqual(
+            footprint_inscribed_radius(self._config(), "local_costmap"), 0.28, places=6)
+
+    def test_field_radius_below_inscribed_is_rejected(self):
+        from nav2.height_band import apply_inflation_radius
+        with self.assertRaises(ValueError) as caught:
+            apply_inflation_radius(self._config(), 0.25)
+        self.assertIn("inscribed", str(caught.exception))
+
+    def test_default_radius_is_accepted(self):
+        from nav2.height_band import apply_inflation_radius
+        config = self._config()
+        apply_inflation_radius(config, 0.55)
+        self.assertEqual(
+            config["local_costmap"]["local_costmap"]["ros__parameters"]
+            ["inflation_layer"]["inflation_radius"], 0.55)
+
+    def test_radius_equal_to_inscribed_is_rejected(self):
+        from nav2.height_band import apply_inflation_radius
+        with self.assertRaises(ValueError):
+            apply_inflation_radius(self._config(), 0.28)
+
+    def test_circle_footprint_uses_robot_radius(self):
+        from nav2.height_band import footprint_inscribed_radius
+        config = self._config()
+        params = config["local_costmap"]["local_costmap"]["ros__parameters"]
+        params.pop("footprint")
+        params["robot_radius"] = 0.4
+        self.assertAlmostEqual(footprint_inscribed_radius(config, "local_costmap"), 0.4)
+
+    def test_missing_footprint_is_rejected(self):
+        from nav2.height_band import footprint_inscribed_radius
+        config = self._config()
+        config["local_costmap"]["local_costmap"]["ros__parameters"].pop("footprint")
+        with self.assertRaises(ValueError):
+            footprint_inscribed_radius(config, "local_costmap")
