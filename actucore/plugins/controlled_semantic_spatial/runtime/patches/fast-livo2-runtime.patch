@@ -98,7 +98,7 @@ index 17f07c2..7666b6a 100644
 \ No newline at end of file
 +#endif
 diff --git a/src/LIVMapper.cpp b/src/LIVMapper.cpp
-index 4b92dfe..a957ca0 100755
+index 4b92dfe..8bc6974 100755
 --- a/src/LIVMapper.cpp
 +++ b/src/LIVMapper.cpp
 @@ -308,12 +308,38 @@ void LIVMapper::initializeFiles()
@@ -143,7 +143,7 @@ index 4b92dfe..a957ca0 100755
    if (enable_image_processing) {
      sub_img_compressed = this->node->create_subscription<sensor_msgs::msg::CompressedImage>(
        img_topic, 200000, std::bind(&LIVMapper::jpeg_callback, this, std::placeholders::_1));
-@@ -340,6 +366,89 @@ void LIVMapper::initializeSubscribersAndPublishers(rclcpp::Node::SharedPtr &node
+@@ -340,6 +366,84 @@ void LIVMapper::initializeSubscribersAndPublishers(rclcpp::Node::SharedPtr &node
    voxelmap_manager->voxel_map_pub_= this->node->create_publisher<visualization_msgs::msg::MarkerArray>("/planes", 10000);
  }
  
@@ -186,11 +186,6 @@ index 4b92dfe..a957ca0 100755
 +    last_point_time_span_ms > 0.0 && last_point_time_span_ms <= 200.0;
 +
 +  std::ostringstream payload;
-+  // Default stream precision is six significant digits, which turns an epoch
-+  // second such as 1793868104.478 into 1.79387e+09. Diagnostics then look like
-+  // a round sentinel value and any consumer comparing stamps loses sub-second
-+  // resolution, so ask for full double precision explicitly.
-+  payload << std::setprecision(17);
 +  payload << "{\"schema\":\"phanthy.navigation.fast_livo2_mapper_runtime.v1\""
 +          << ",\"lidar_callbacks\":" << lidar_callback_count
 +          << ",\"imu_callbacks\":" << imu_callback_count
@@ -233,7 +228,7 @@ index 4b92dfe..a957ca0 100755
  void LIVMapper::jpeg_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg)
  {
      // Skip processing if image processing is globally disabled
-@@ -709,11 +818,32 @@ void LIVMapper::run(rclcpp::Node::SharedPtr &node)
+@@ -709,11 +813,32 @@ void LIVMapper::run(rclcpp::Node::SharedPtr &node)
      }
      handleFirstFrame();
  
@@ -266,7 +261,7 @@ index 4b92dfe..a957ca0 100755
    }
    savePCD();
  }
-@@ -868,6 +998,7 @@ void LIVMapper::RGBpointBodyLidarToIMU(PointType const *const pi, PointType *con
+@@ -868,6 +993,7 @@ void LIVMapper::RGBpointBodyLidarToIMU(PointType const *const pi, PointType *con
  void LIVMapper::standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg)
  {
    if (!lidar_en) return;
@@ -274,7 +269,7 @@ index 4b92dfe..a957ca0 100755
    mtx_buffer.lock();
  
    double cur_head_time = stamp2Sec(msg->header.stamp) + lidar_time_offset;
-@@ -881,7 +1012,14 @@ void LIVMapper::standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::ConstShare
+@@ -881,7 +1007,14 @@ void LIVMapper::standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::ConstShare
    p_pre->process(msg, ptr);
    lid_raw_data_buffer.push_back(ptr);
    lid_header_time_buffer.push_back(cur_head_time);
@@ -289,7 +284,7 @@ index 4b92dfe..a957ca0 100755
  
    mtx_buffer.unlock();
    sig_buffer.notify_all();
-@@ -890,6 +1028,7 @@ void LIVMapper::standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::ConstShare
+@@ -890,6 +1023,7 @@ void LIVMapper::standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::ConstShare
  void LIVMapper::livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr &msg_in)
  {
    if (!lidar_en) return;
@@ -297,7 +292,7 @@ index 4b92dfe..a957ca0 100755
    mtx_buffer.lock();
    livox_ros_driver2::msg::CustomMsg::SharedPtr msg(new livox_ros_driver2::msg::CustomMsg(*msg_in));
    if (abs(last_timestamp_imu - stamp2Sec(msg->header.stamp)) > 1.0 && !imu_buffer.empty())
-@@ -918,7 +1057,14 @@ void LIVMapper::livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::ConstShar
+@@ -918,7 +1052,14 @@ void LIVMapper::livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::ConstShar
  
    lid_raw_data_buffer.push_back(ptr);
    lid_header_time_buffer.push_back(cur_head_time);
@@ -312,7 +307,7 @@ index 4b92dfe..a957ca0 100755
  
    mtx_buffer.unlock();
    sig_buffer.notify_all();
-@@ -927,16 +1073,19 @@ void LIVMapper::livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::ConstShar
+@@ -927,16 +1068,19 @@ void LIVMapper::livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::ConstShar
  void LIVMapper::imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr &msg_in)
  {
    if (!imu_en) return;
@@ -334,7 +329,7 @@ index 4b92dfe..a957ca0 100755
    }
  
    if (ros_driver_fix_en) timestamp += std::round(last_timestamp_lidar - timestamp);
-@@ -954,16 +1103,26 @@ void LIVMapper::imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr &msg_in)
+@@ -954,16 +1098,26 @@ void LIVMapper::imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr &msg_in)
  
    if (last_timestamp_imu > 0.0 && timestamp > last_timestamp_imu + 0.2)
    {
@@ -366,7 +361,7 @@ index 4b92dfe..a957ca0 100755
    mtx_buffer.unlock();
    if (imu_prop_enable)
    {
-@@ -1056,8 +1215,13 @@ bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
+@@ -1056,8 +1210,13 @@ bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
        // larger than _lidar_frame_end_time,
        // make sure complete propagate.
        // ROS_ERROR("out sync");
@@ -380,7 +375,7 @@ index 4b92dfe..a957ca0 100755
  
      struct MeasureGroup m; // standard method to keep imu message.
  
-@@ -1331,7 +1495,14 @@ void LIVMapper::publish_frame_world(const rclcpp::Publisher<sensor_msgs::msg::Po
+@@ -1331,7 +1490,14 @@ void LIVMapper::publish_frame_world(const rclcpp::Publisher<sensor_msgs::msg::Po
    { 
      pcl::toROSMsg(*pcl_w_wait_pub, laserCloudmsg); 
    }
@@ -396,7 +391,7 @@ index 4b92dfe..a957ca0 100755
    laserCloudmsg.header.frame_id = "camera_init";
    pubLaserCloudFullRes->publish(laserCloudmsg);
  
-@@ -1480,11 +1651,31 @@ template <typename T> void LIVMapper::set_posestamp(T &out)
+@@ -1480,11 +1646,31 @@ template <typename T> void LIVMapper::set_posestamp(T &out)
    out.orientation.w = geoQuat.w;
  }
  
@@ -429,7 +424,7 @@ index 4b92dfe..a957ca0 100755
    set_posestamp(odomAftMapped.pose.pose);
  
    static std::shared_ptr<tf2_ros::TransformBroadcaster> br;
-@@ -1516,4 +1707,4 @@ void LIVMapper::publish_path(const rclcpp::Publisher<nav_msgs::msg::Path>::Share
+@@ -1516,4 +1702,4 @@ void LIVMapper::publish_path(const rclcpp::Publisher<nav_msgs::msg::Path>::Share
    msg_body_pose.header.frame_id = "camera_init";
    path.poses.push_back(msg_body_pose);
    pubPath->publish(path);

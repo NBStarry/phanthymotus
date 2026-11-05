@@ -117,7 +117,7 @@ class FastLivo2ContractTest(unittest.TestCase):
             source_lock,
         )
         self.assertIn(
-            "FAST_LIVO2_RUNTIME_PATCH_SHA256=63229fece90e54e440c239920d1c0483addd9bc6a5b3040c48fbcc8e13e1842e",
+            "FAST_LIVO2_RUNTIME_PATCH_SHA256=1e776ea08d0082fdef911b93aa88b88aee2a2b91a9bb08b608bb34daa4dd8b7f",
             source_lock,
         )
         self.assertIn(
@@ -228,7 +228,7 @@ class FastLivo2ContractTest(unittest.TestCase):
         )
         self.assertEqual(
             hashlib.sha256(runtime_patch.read_bytes()).hexdigest(),
-            "63229fece90e54e440c239920d1c0483addd9bc6a5b3040c48fbcc8e13e1842e",
+            "1e776ea08d0082fdef911b93aa88b88aee2a2b91a9bb08b608bb34daa4dd8b7f",
         )
         self.assertEqual(
             hashlib.sha256(pcd_patch.read_bytes()).hexdigest(),
